@@ -1,0 +1,88 @@
+{
+  "summary": "Completed full regression testing after 40+ file changes. CRITICAL BUG FIX VERIFIED: Pending commissions now match between TradesPage (Contracts) and CommissionsPage (Brokerage Invoices) - both use trade.invoicePaid field as source of truth. BEK446 is the only pending commission and appears correctly in both pages. All 34/35 backend API tests passed (1 minor failure: /api/market/news endpoint doesn't exist). All UI pages load and function correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/market/news", "issue": "Endpoint returns 404 - may not exist or have different path", "priority": "LOW"}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "BUG FIX: TradesPage 'Awaiting Brokerage Payment' section shows BEK446 (status=completed, invoicePaid=false)",
+    "BUG FIX: CommissionsPage 'Pending USD' section shows BEK446 with PENDING status",
+    "BUG FIX: Both pages now use trade.invoicePaid field as source of truth - MATCHING",
+    "Login flow: Admin (salih.karagoz/salih123) works correctly",
+    "Login flow: Accountant (pir.accounts/pir123) works correctly",
+    "Global search: Searches contracts (BEK446 found with details)",
+    "Global search: Searches partners (Mediterra shows 10 contracts)",
+    "Global search: Searches vessels (MV ARIYA shows contract and vessel)",
+    "Contracts page: Shows Ongoing (3), Pending (0), Completed (1), Awaiting Brokerage (1)",
+    "Vessel Execution page: Shows Awaiting Brokerage Payment (3), Completed (10) with filters",
+    "Vessel Execution filters: Commodity, Seller, Buyer, Origin, Vessel all present",
+    "Market Data page: All 5 tabs load (Indications, CBOT & Exchange Rates, Turkish Exchanges, Tenders, Coaster Freights)",
+    "Accounting page: Loads with Incoming (11), Outgoing (2), Bank Statements tabs",
+    "Accounting RBAC: Admin can access all tabs",
+    "Accounting RBAC: Accountant can read vendors and bank-accounts (verified via API)",
+    "Accounting RBAC: Accountant cannot create vendors (403 returned)",
+    "Partners page: Shows 97 counterparties with Sellers/Buyers/Co-Brokers tabs",
+    "Calendar page: Shows March 2026 with events (Ramazan Bayramı, conferences)",
+    "Port Line-Ups page: Daily and Monthly tabs with vessel data",
+    "New Contract page: Form renders with all fields (Contract Details, Parties, Commodity)",
+    "Year filter on TradesPage includes older completed trades with unpaid brokerage",
+    "Backend API: GET /api/trades returns 14 trades",
+    "Backend API: GET /api/trades/{id} returns trade details",
+    "Backend API: PATCH /api/trades/{id}/status works",
+    "Backend API: GET /api/partners returns partners list",
+    "Backend API: GET /api/vessels returns vessels list",
+    "Backend API: GET /api/commodities returns commodities",
+    "Backend API: GET /api/ports returns ports",
+    "Backend API: GET /api/surveyors returns surveyors",
+    "Backend API: GET /api/origins returns origins",
+    "Backend API: GET /api/market/prices returns prices",
+    "Backend API: GET /api/market/tenders returns tenders",
+    "Backend API: GET /api/vendors returns vendors",
+    "Backend API: GET /api/bank-accounts returns bank accounts",
+    "Backend API: GET /api/bank-statements returns statements",
+    "Backend API: GET /api/events returns events",
+    "Backend API: GET /api/port-lineups/dates returns dates",
+    "Backend API: GET /api/port-lineups/summary returns summary",
+    "Backend API: GET /api/invoices returns invoices"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_regression_iteration18.py",
+    "/app/test_reports/pytest/pytest_iteration18.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "BUG FIX VERIFIED: TradesPage lines 190-196 now use trade.invoicePaid field to determine pending commissions, matching CommissionsPage line 73",
+    "Year filter logic (lines 106-124) correctly includes older completed trades with unpaid brokerage when viewing current year",
+    "VesselExecutionPage uses status='brokerage' for its 'Awaiting Brokerage Payment' section - this is different from TradesPage which uses invoicePaid=false for completed trades. Both are valid for their respective purposes.",
+    "Global search implementation in AppLayout.js works correctly with Turkish character normalization"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_regression_iteration18.py"
+  ],
+  "success_rate": {
+    "backend": "97% (34/35 tests passed)",
+    "frontend": "100% (all pages and features verified)"
+  },
+  "test_credentials": {
+    "admin": {"username": "salih.karagoz", "password": "salih123"},
+    "accountant": {"username": "pir.accounts", "password": "pir123"}
+  },
+  "seed_data_creation": "None - used existing data. BEK446 is the only trade with invoicePaid=false",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The critical bug fix has been verified: pending commissions now match between TradesPage and CommissionsPage. BEK446 (Barley, Bek Tarim → Mediterra Agro, MV DRY VOYAGER 1) is the only pending commission with invoicePaid=false. The VesselExecutionPage shows 'Awaiting Brokerage Payment' based on status='brokerage' which is different from the TradesPage logic - this is intentional. All 14 trades exist in the database. MW1002, PIR-26-AZ8304, RC190126 have status='brokerage' but invoicePaid=True (already paid). The /api/market/news endpoint doesn't exist - Indications tab uses a different mechanism.",
+  "bugs_fixed": [
+    {
+      "bug": "Pending commissions mismatch between TradesPage and CommissionsPage",
+      "fix": "Both pages now use trade.invoicePaid field as source of truth",
+      "verification": "BEK446 appears in both 'Awaiting Brokerage Payment' (TradesPage) and 'Pending USD' (CommissionsPage)"
+    }
+  ]
+}

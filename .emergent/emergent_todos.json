@@ -1,0 +1,34 @@
+[
+  {
+    "content": "Fix sidebar logo text to one row",
+    "status": "completed"
+  },
+  {
+    "content": "Phase 1: Add 16 trade statuses + status filter to Trades page",
+    "status": "completed"
+  },
+  {
+    "content": "Phase 1: Omega page with Invoices + Bank Statements tabs",
+    "status": "completed"
+  },
+  {
+    "content": "Phase 1: Notifications bell in header with dropdown",
+    "status": "completed"
+  },
+  {
+    "content": "Phase 2: User Groups (RBAC) - Omega visible only for admin/accountant",
+    "status": "completed"
+  },
+  {
+    "content": "Phase 3: Counterparties - business card view with Eye icon + departments model",
+    "status": "completed"
+  },
+  {
+    "content": "Phase 4: Trade Detail page with Confirmation, Shipment, Parties, Documents tabs",
+    "status": "completed"
+  },
+  {
+    "content": "Phase 4: Shipment Document Checklist (Wheat 13 docs, Corn +3, WBP +1)",
+    "status": "completed"
+  }
+]

@@ -1,0 +1,32 @@
+/* BA Ticaret - Global Styles */
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fadeIn 200ms ease-out;
+}
+
+/* Status badge text */
+.status-badge {
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+}
+
+/* Table borders */
+.trade-table th, .trade-table td {
+  border-right: 1px solid hsl(var(--border));
+  text-align: center;
+}
+.trade-table th:last-child, .trade-table td:last-child {
+  border-right: none;
+}

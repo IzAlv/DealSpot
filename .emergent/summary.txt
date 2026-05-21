@@ -1,0 +1,133 @@
+<analysis>Here is the handover summary for the next agent:
+
+**original_problem_statement**: The user wants to build a full-stack responsive web application for tracking agricultural and financial market data, integrated into an existing commodity trading dashboard. PRODUCT REQUIREMENTS: Live Market Prices Dashboard, Turkish Commodity Exchange Prices, Notes System (Indications), Telegram Feed Integration, TMO/SAGO/OAIC/MIT Tender Tracking Module, Coaster Freights Module, Documentary Instructions Generator, unified Vessel Execution pipeline, Brokerage/Commissions management, automated Accounting syncing, Port Line-Ups (Daily & Monthly), Calendar for events, and responsive modern UI/UX with dark mode.
+
+**User's preferred language**: English (INSTRUCT NEXT AGENT: Respond in English only)
+
+**what currently exists?** 
+A comprehensive, highly customized commodity trading dashboard. Core features include deep contract lifecycle management, auto-generated commission invoices with complex payment status logic, dynamic document checklists, and extensive market data tools. The UI features a global search with Turkish character transliteration, detailed vessel execution tracking with dynamic Brokerage statuses, inline editing for market indications, and cross-referenced counterparties management.
+
+**Last working item**:
+    - Last item agent was working: Fixing a mismatch in Pending Commissions between the Brokerage page and Contracts page. 
+    - Reasoning: The user reported that pending invoices don't match between the two pages. The agent's final bash execution revealed that the Brokerage page is filtering based on a boolean/custom state ( or a specific currency filter) and missing contract , while the Contracts page logic was updated to read directly from  but is missing contract  (likely due to a 2026 vs 2025 year filter). 
+    - Status: IN PROGRESS
+    - Agent Testing Done: N (Stopped mid-investigation)
+    - Which testing method agent to use? Frontend testing agent / Screenshot tool
+    - User Testing Done: N
+
+**All Pending/In progress Issue list**:
+  Issue 1: Pending Commissions Mismatch between Brokerage and Contracts Pages (P0)
+     - Attempted fixes: Agent updated the Contracts page Awaiting Brokerage table to use actual pending commission invoice statuses.
+     - Next debug checklist: Check  filtering logic. Why is  missing? (Look at  flags, currency filters, or year filters). Ensure both pages use a unified source of truth for pending commissions.
+     - Why fix this issue and what will be achieved with the fix?: Ensures financial data consistency across the application.
+     - Status: IN PROGRESS
+     - Is recurring issue? N
+     - Should Test frontend/backend/both after fix? frontend
+     - Blocked on other issue: None
+
+  Issue 2: Clarify CBOT - Soybeans Removal (P2)
+     - Attempted fixes: Inherited from previous sessions.
+     - Next debug checklist: Ask the user: Should CBOT - Soybeans be removed from the Live Market Prices table?
+     - Why fix this issue and what will be achieved with the fix?: Cleans up an orphaned requirement.
+     - Status: NOT STARTED
+     - Is recurring issue? N
+     - Should Test frontend/backend/both after fix? frontend
+     - Blocked on other issue: None
+
+**In progress Task List**:
+  Task 1: Implement Left Menu Bar Full E-mail Client (Gmail) (P0)
+     - Where to resume: Wait for user to provide Google OAuth credentials. Agent previously requested them via  but user pivoted to UI changes.
+     - What will be achieved with this?: In-app email management.
+     - Status: BLOCKED
+     - Should Test frontend/backend/both after fix? both
+     - Blocked on something: User providing Google OAuth credentials.
+
+**Upcoming and Future Tasks**
+Upcoming Tasks:
+- P0: Implement Left Menu Bar Full E-mail Client (Gmail) (Must use ).
+
+Future Tasks:
+- P1: Full Server-Side RBAC: Implement role-based access control on the backend for more granular permissions.
+- P2: Refactor : Extract the various scraping functions into a separate  module. Break down large files (, , ).
+- P2: Copy to Clipboard on TMO tender cards: Format tender data for easy sharing.
+- P2: Automatic daily scraping: Set up a scheduled task for KTB and GTB prices.
+
+**Completed work in this session**
+- **Global Search Implementation**: Added universal search bar (700px width) in  searching across Contracts, Counterparties, and Vessels. Includes Turkish character transliteration and navigates directly to specific partner details ().
+- **Contract Lifecycle / Brokerage Pipeline**: 
+  - Prevented contracts from being marked completed without a Payment Date and SWIFT copy.
+  - Created a new Awaiting Brokerage Payment section on the Contracts page for completed contracts that still have pending broker commissions. Forced the frontend to display a BROKERAGE badge for these.
+  - Separated Brokerage status out of Ongoing into its own section in Vessel Execution.
+- **Vessel Execution Updates**: Added a filter bar (Commodity, Seller, Buyer, Origin, Vessel), rearranged table columns (Origin replaced Broker, Quantity moved), and implemented dynamic text wrapping for long commodity/vessel names.
+- **Document Viewing**: Fixed Draft Documents to view PDFs in-browser (fixed backend returning  to return proper mimetypes). Mirrored the Eye (View) button functionality to Shipment Documents.
+- **UI/UX Re-styling**: Moved page titles to align with content, removed subtitles, consolidated Address/City/Country in Counterparties, added Tax ID/Office columns, and added Shortage calculations to B/L details.
+- **Market Data**: Added inline edit capability (Pencil icon) for user-posted Indications on the Market Data page.
+
+**Earlier issues found/mentioned but not fixed**
+  - None (All immediate user UI requests were fulfilled except the final Brokerage mismatch).
+
+**Known issue recurrence from previous fork**
+  - Issue recurrence in previous fork: None observed in this session.
+
+**Code Architecture**
+
+
+**Key Technical Concepts**
+- **Unified Global Search**: Implemented in , it queries local state/APIs and utilizes a debounced input. Includes custom Turkish transliteration () so English typing finds Turkish results.
+- **Brokerage Status Override**: Contracts with unpaid commission invoices are technically completed in the DB but are overridden on the frontend to display as BROKERAGE and are isolated in specific tables.
+
+**key DB schema**
+  - : Used for indications. Backend  updated to specifically only mutate  to prevent overwriting commodity tags.
+
+**changes in tech stack**
+  - None
+
+**All files of reference**
+-  (Heavily modified for Global Search and header layouts).
+-  (Modified for Awaiting Brokerage tables).
+-  (Filters, columns, word wrapping logic).
+-  (CRITICAL for next agent: Source of the pending invoice mismatch).
+-  (Mimetype fixes for draft downloads, completion validation).
+
+**Areas that need refactoring**:
+-  and  have grown significantly with complex filter and mapping logic. Breaking out the tables into smaller components is highly recommended. 
+- Global search in  adds a lot of state to the root layout; moving search logic to a custom hook or dedicated component would improve maintainability.
+
+**key api endpoints**
+-  & : Now enforce  and  presence before allowing completed status.
+- : Now utilizes  to allow browser viewing.
+
+**Critical Info for New Agent**
+- **Testing Debt**: The agent ran a full 100% successful regression test at the *very start* of the session (Iteration 17). However, the agent subsequently made **over 40 significant file modifications** to routing, global search, table rendering, and trade validation logic without running the  again. **Running the testing subagent should be a high priority after fixing the current Brokerage bug.**
+
+**documents and test reports created in this job**
+-  (Run at the start of the job)
+-  (Updated via finish tool)
+
+**Last 10 User Messages and any pending HUMAN messages** 
+1. **Request**: status must be Brokerage (COMPLETED - Moved out of ongoing to Awaiting Brokerage)
+2. **Request**: payment date and swift entered but still shows as ongoing... make filters for vessel execution (COMPLETED)
+3. **Request**: pending commissions invoices on brokerage page and contracts page pending commissions not matching (COMPLETED - Synced Contracts page to use actual pending invoice data).
+4. **Request**: when a contract status is Awaiting Brokerage Payment label must be BROKERAGE not completed (COMPLETED - Added status override prop to table renderer).
+5. **Request**: pending invoices in brokers commission and contracts not matching [Images provided] (IN PROGRESS - Final task. Brokerage page shows 1 invoice, Contracts page shows a different 1 invoice).
+
+**Project Health Check:**
+- Broken: BrokeragePage pending list filtering logic is mismatched with TradesPage logic. 
+- Mocked: None
+
+**3rd Party Integrations**
+- : Email sending (User API Key).
+- : Object Storage and OCR (Emergent LLM Key Applicability). Mandatory for the blocked P0 Gmail integration task.
+
+**Testing status**
+  - Testing agent used after significant changes: NO (Testing agent was used *before* all the major UI/Logic changes).
+  - Troubleshoot agent used after agent stuck in loop: NO
+  - Test files created: []
+  - Known regressions: Pending Invoices UI logic mismatch.
+
+**Credentials to test flow:**
+- Admin/User:  / 
+- Accountant:  / 
+
+**What agent forgot to execute**
+- The agent forgot to run the  at the end of the session to validate the massive amount of global layout, global search, and contract validation changes.</analysis>

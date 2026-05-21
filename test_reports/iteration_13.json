@@ -1,0 +1,90 @@
+{
+  "summary": "Completed testing of Documentary Instructions (DI) page enhancements. All 9 backend tests passed (100%). All 7 frontend features verified working correctly. Port dropdown shows 'Name, Country' format, surveyor label changed to 'Buyer Surveyor at Load Port', new read-only 'Seller Surveyor at Load Port' field auto-populates from contract.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "Backend: GET /api/ports returns ports with name, type, country fields",
+    "Backend: Discharge ports include Turkish ports (Türkiye)",
+    "Backend: GET /api/trades returns trades with sellerSurveyor field",
+    "Backend: GET /api/doc-instructions/ lists all DIs",
+    "Backend: POST /api/doc-instructions/ creates DI with sellerSurveyor field",
+    "Backend: POST /api/doc-instructions/ auto-populates sellerSurveyor from trade when not provided",
+    "Backend: PUT /api/doc-instructions/{id} preserves sellerSurveyor field",
+    "Backend: GET /api/doc-instructions/{id} returns sellerSurveyor field",
+    "Backend: GET /api/surveyors returns surveyors list for dropdown",
+    "Frontend: Port dropdown shows 'Name, Country' format (e.g., 'Samsun, Türkiye', 'Alexandria, Egypt')",
+    "Frontend: Label changed from 'Surveyor at Load Port' to 'Buyer Surveyor at Load Port'",
+    "Frontend: New 'Seller Surveyor at Load Port' label visible in dialog",
+    "Frontend: Seller surveyor input field is read-only",
+    "Frontend: Seller surveyor auto-populates when contract is selected (e.g., 'General Survey')",
+    "Frontend: Preview section shows both 'Buyer Surveyor at Load Port' and 'Seller Surveyor at Load Port' labels",
+    "Frontend: Edit mode loads sellerSurveyor field correctly"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_doc_instructions.py",
+    "/app/test_reports/pytest/pytest_doc_instructions.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "DocInstructionsPage.js correctly implements all 3 requested enhancements",
+    "Port dropdown uses Map to deduplicate and format as 'Name, Country'",
+    "handleTradeSelect function properly auto-populates sellerSurveyor from trade",
+    "Seller surveyor input has readOnly attribute and bg-muted/50 styling for visual distinction",
+    "Backend doc_instructions.py correctly includes sellerSurveyor in both Create and Update Pydantic models",
+    "Backend auto-populates sellerSurveyor from trade if not provided during creation",
+    "Email template updated to show both Buyer and Seller surveyors"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_doc_instructions.py"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9 tests passed)",
+    "frontend": "100% (7/7 features verified)"
+  },
+  "test_credentials": {
+    "username": "salih.karagoz",
+    "password": "salih123"
+  },
+  "seed_data_creation": "Test DIs created and cleaned up during backend and frontend tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "DI page enhancements complete. Port dropdown shows 'Name, Country' format. Surveyor label is now 'Buyer Surveyor at Load Port'. New read-only 'Seller Surveyor at Load Port' field auto-populates from trade.sellerSurveyor when contract is selected. Preview and email template show both surveyor fields.",
+  "features_verified": {
+    "port_dropdown_format": {
+      "status": "PASS",
+      "format": "Name, Country",
+      "examples": ["Samsun, Türkiye", "Alexandria, Egypt", "Bandırma, Türkiye", "Karasu, Türkiye"]
+    },
+    "buyer_surveyor_label": {
+      "status": "PASS",
+      "old_label": "Surveyor at Load Port",
+      "new_label": "Buyer Surveyor at Load Port"
+    },
+    "seller_surveyor_field": {
+      "status": "PASS",
+      "label": "Seller Surveyor at Load Port",
+      "type": "read-only input",
+      "auto_populates_from": "trade.sellerSurveyor"
+    },
+    "preview_section": {
+      "status": "PASS",
+      "shows_buyer_surveyor": true,
+      "shows_seller_surveyor": true
+    },
+    "create_di": {
+      "status": "PASS",
+      "saves_seller_surveyor": true
+    },
+    "edit_di": {
+      "status": "PASS",
+      "loads_seller_surveyor": true
+    }
+  }
+}

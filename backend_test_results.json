@@ -1,0 +1,198 @@
+{
+  "timestamp": "2026-03-21T10:58:48.397135",
+  "total_tests": 38,
+  "passed_tests": 38,
+  "success_rate": 100.0,
+  "results": [
+    {
+      "test": "Health Check",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Valid Login (salihkaragoz/salih123)",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Invalid Login (wrong credentials)",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Get Current User",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "List Trades",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Trade Stats",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Search Trades",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Filter Trades by Status",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Get Partners for Trade",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Get Commodities for Trade",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Create Trade",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Get Trade by ID",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Update Trade",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Delete Trade",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "List All Partners",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "List Buyers",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "List Sellers",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "List Co-Brokers",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Search Partners",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Create Partner",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Get Partner by ID",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Update Partner",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Delete Partner",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "List Vessels",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Search Vessels",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Create Vessel",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Update Vessel",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Delete Vessel",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "List Documents",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Upload Document",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Delete Document",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "List Commodities",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "List Origins",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "List Ports",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "List Surveyors",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "List Events",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Create Event",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Delete Event",
+      "success": true,
+      "details": ""
+    }
+  ]
+}

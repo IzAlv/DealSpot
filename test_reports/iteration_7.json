@@ -1,0 +1,99 @@
+{
+  "summary": "Completed frontend testing of Year-based Filters on Trades page. All 8 test cases passed. Year filter dropdown with CalendarDays icon works correctly. Default year 2026 shows 8 active trades (1 ongoing + 7 pending) from 2025 that are NOT completed/cancelled/washout. Cancelled trade BAH55 correctly hidden in 2026 view. 2025 view shows all 9 trades including BAH55. 2024 shows 0 trades. Clear Filter button and combined filters work correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "Year filter dropdown appears with CalendarDays icon and data-testid='trades-year-filter'",
+    "Default year is 2026 (current year)",
+    "2026 filter shows 8 trades: 1 ongoing + 7 pending (trades from 2025 NOT completed/cancelled/washout)",
+    "2026 filter does NOT show cancelled trade BAH55 from 2025",
+    "2025 filter shows ALL 9 trades from 2025 including cancelled BAH55",
+    "2024 filter shows 0 trades (no trades exist for 2024)",
+    "Clear Filter button appears when year is not 2026 and resets year to 2026",
+    "Year filter works in combination with other filters (search, commodity, seller, buyer)"
+  ],
+  "test_report_links": [
+    "/app/frontend/src/pages/TradesPage.js",
+    "/app/frontend/src/lib/constants.js"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Year filter logic correctly implemented using COMPLETED_STATUSES, CANCELLED_STATUSES, WASHOUT_STATUSES from constants.js",
+    "yearFilteredTrades useMemo correctly filters: for current year shows trades from any year with non-terminal status, for past years shows only trades from that exact year",
+    "getTradeYear helper correctly parses both DD/MM/YYYY and ISO date formats",
+    "data-testid='trades-year-filter' properly added for testing"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend only testing)",
+    "frontend": "100% (8/8 tests passed)"
+  },
+  "test_credentials": {
+    "admin_user": "salih.karagoz / salih123"
+  },
+  "seed_data_creation": "None - used existing 9 trades from 2025 in database",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Year filter feature fully tested and working. Trades page has 5 sections: Ongoing, Pending, Completed, Washout, Cancelled. All 9 existing trades are from 2025 (contract dates in 2025). One trade BAH55 is cancelled. When viewing 2026 (current year), shows 8 trades that are NOT completed/cancelled/washout. When viewing 2025, shows all 9 trades. When viewing 2024, shows 0 trades. Year filter dropdown has data-testid='trades-year-filter'. Clear Filter button has data-testid='trades-clear-filter'.",
+  "features_verified": {
+    "year_filter_dropdown": {
+      "location": "Filter bar after search input",
+      "icon": "CalendarDays (lucide-react)",
+      "data_testid": "trades-year-filter",
+      "options": ["2026", "2025", "2024"],
+      "default_value": "2026"
+    },
+    "filter_logic": {
+      "current_year_2026": "Shows trades from any year with non-terminal status (not completed/cancelled/washout)",
+      "past_year_2025": "Shows only trades from 2025 regardless of status",
+      "past_year_2024": "Shows only trades from 2024 (none exist)"
+    },
+    "trade_counts": {
+      "2026_view": {
+        "ongoing": 1,
+        "pending": 7,
+        "completed": 0,
+        "washout": 0,
+        "cancelled": 0,
+        "total": 8
+      },
+      "2025_view": {
+        "ongoing": 1,
+        "pending": 7,
+        "completed": 0,
+        "washout": 0,
+        "cancelled": 1,
+        "total": 9
+      },
+      "2024_view": {
+        "ongoing": 0,
+        "pending": 0,
+        "completed": 0,
+        "washout": 0,
+        "cancelled": 0,
+        "total": 0
+      }
+    },
+    "cancelled_trade_bah55": {
+      "contract_number": "BAH55",
+      "contract_date": "10/12/2025",
+      "seller": "Baha Tanmsal",
+      "buyer": "Mediterra Agro",
+      "status": "CANCELLED",
+      "visible_in_2026": false,
+      "visible_in_2025": true
+    },
+    "clear_filter_button": {
+      "data_testid": "trades-clear-filter",
+      "appears_when": "year is not 2026 (current year)",
+      "action": "Resets year filter to 2026"
+    }
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "summary": "Completed regression testing after major VesselExecutionPage split. Fixed critical bug where detail view (/documents/:tradeId) was not loading trade data due to missing urlTradeId dependency in useEffect. Also fixed backend bugs: missing timezone import and misplaced download_draft_document function decorator.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/auth/login (accountant)", "issue": "pir.accounts credentials may have changed - seed uses piraccount/piraccount123", "priority": "LOW"}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "Login flow: POST /api/auth/login with admin credentials (salih.karagoz/salih123) returns token",
+    "Login redirects to /trades dashboard after successful login",
+    "Contracts page: Table loads with contract data",
+    "Vessel Execution list view (/documents): Shows Ongoing Contracts (7), Completed Contracts (1), Pending Vessel Nomination (5) tables",
+    "Vessel Execution list view: Mobile contract selector dropdown present",
+    "Vessel Execution detail view (/documents/:tradeId): Loads trade data with all 7 tabs (Nomination, DI, Drafts, B/L, Appropriation, Docs, Payment)",
+    "Vessel Execution detail view: Back button returns to list view",
+    "Draft Documents tab: Bulk upload zone present, 13 required document rows displayed",
+    "B/L tab: Bill of Lading details displayed with Edit button",
+    "Payment tab: Payment date picker and SWIFT upload present",
+    "DI tab: Documentary Instruction content loaded",
+    "Accounting page (/omega): Summary cards and 3 tabs (Incoming, Outgoing, Bank Statements)",
+    "Calendar page: Calendar with events displayed (Ramazan Bayramı visible)",
+    "Brokerage Invoices page (/commissions): Total Commission $55,228.79 displayed with filter dropdowns",
+    "Market Data page: 5 tabs (Indications, CBOT & Exchange Rates, Turkish Exchanges, Tenders, Coaster Freights)",
+    "Port Line-Ups page: Daily and Monthly tabs with port data",
+    "Settings page: Profile info and reference data tabs",
+    "Backend API: GET /api/trades returns trades list",
+    "Backend API: GET /api/trades/{id} returns trade details",
+    "Backend API: GET /api/events returns events",
+    "Backend API: GET /api/invoices returns invoices",
+    "Backend API: GET /api/config/active-url returns correct URL"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_regression_iteration16.py",
+    "/app/test_reports/pytest/pytest_iteration16.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "FIXED: VesselExecutionPage useEffect missing urlTradeId dependency - detail view was not loading trade data",
+    "FIXED: trades.py missing timezone import for datetime.now(timezone.utc)",
+    "FIXED: trades.py download_draft_document function was not properly decorated (decorator separated from function)"
+  ],
+  "updated_files": [
+    "/app/frontend/src/pages/VesselExecutionPage.js",
+    "/app/backend/routes/trades.py",
+    "/app/memory/test_credentials.md"
+  ],
+  "success_rate": {
+    "backend": "95% (18/19 tests passed)",
+    "frontend": "100% (all pages and features verified)"
+  },
+  "test_credentials": {
+    "admin": {"username": "salih.karagoz", "password": "salih123"},
+    "accountant": {"username": "piraccount", "password": "piraccount123", "note": "pir.accounts exists but password may have changed"}
+  },
+  "seed_data_creation": "None - used existing data",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "VesselExecutionPage now has split routing: /documents shows list view with 3 tables (Ongoing, Completed, Pending), /documents/:tradeId shows detail view with 7 tabs. The useEffect dependency was fixed to include urlTradeId. All major pages tested and working. Backend trades.py had timezone import and decorator issues that were fixed.",
+  "bugs_fixed": [
+    {
+      "file": "/app/frontend/src/pages/VesselExecutionPage.js",
+      "issue": "useEffect had empty dependency array [], causing detail view to not load trade data when navigating from list",
+      "fix": "Added urlTradeId to dependency array: [urlTradeId]"
+    },
+    {
+      "file": "/app/backend/routes/trades.py",
+      "issue": "Missing timezone import for datetime.now(timezone.utc)",
+      "fix": "Added timezone to import: from datetime import datetime, timedelta, timezone"
+    },
+    {
+      "file": "/app/backend/routes/trades.py",
+      "issue": "download_draft_document function decorator was separated from function definition",
+      "fix": "Moved function definition directly after @router.get decorator"
+    }
+  ]
+}
