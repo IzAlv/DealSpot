@@ -17,9 +17,11 @@ import re
 from database import trades_col, partners_col, commodities_col
 from auth import get_current_user
 
-pdfmetrics.registerFont(TTFont('FreeSans', '/usr/share/fonts/truetype/freefont/FreeSans.ttf'))
-pdfmetrics.registerFont(TTFont('FreeSansBold', '/usr/share/fonts/truetype/freefont/FreeSansBold.ttf'))
-pdfmetrics.registerFont(TTFont('FreeSansOblique', '/usr/share/fonts/truetype/freefont/FreeSansOblique.ttf'))
+# Register Liberation Sans fonts (free Arial equivalent, supports Turkish characters)
+_FONTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'fonts')
+pdfmetrics.registerFont(TTFont('FreeSans', os.path.join(_FONTS_DIR, 'LiberationSans-Regular.ttf')))
+pdfmetrics.registerFont(TTFont('FreeSansBold', os.path.join(_FONTS_DIR, 'LiberationSans-Bold.ttf')))
+pdfmetrics.registerFont(TTFont('FreeSansOblique', os.path.join(_FONTS_DIR, 'LiberationSans-Italic.ttf')))
 pdfmetrics.registerFontFamily('FreeSans', normal='FreeSans', bold='FreeSansBold', italic='FreeSansOblique')
 
 router = APIRouter(prefix="/api/business-confirmation", tags=["business-confirmation"])
