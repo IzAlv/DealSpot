@@ -135,8 +135,8 @@ export default function NewTradePage() {
     buyerTradeContact: null, buyerExecutionContact: null,
     brokerTradeContact: null, brokerExecutionContact: null,
     coBrokerTradeContact: null, coBrokerExecutionContact: null,
-    executionHandledBy: 'Alena Karagoz',
-    brokerPersonName: 'Salih Karagoz',
+    executionHandledBy: 'Izzet Alev',
+    brokerPersonName: 'Izzet Alev',
   });
 
   useEffect(() => {
@@ -228,7 +228,7 @@ export default function NewTradePage() {
             coBrokerTradeContact: t.coBrokerTradeContact || null,
             coBrokerExecutionContact: t.coBrokerExecutionContact || null,
             executionHandledBy: t.executionHandledBy || '',
-            brokerPersonName: t.brokerPersonName || 'Salih Karagoz',
+            brokerPersonName: t.brokerPersonName || 'Izzet Alev',
           });
           setLoadingTrade(false);
         } else {
@@ -359,8 +359,7 @@ export default function NewTradePage() {
             <Select value={form.executionHandledBy} onValueChange={(v) => set('executionHandledBy', v)}>
               <SelectTrigger data-testid="execution-handled-by-select"><SelectValue placeholder="Select person" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="Alena Karagoz">Alena Karagoz</SelectItem>
-                <SelectItem value="Melisa Karagoz">Melisa Karagoz</SelectItem>
+                <SelectItem value="Izzet Alev">Izzet Alev</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -412,7 +411,7 @@ export default function NewTradePage() {
           </div>
           <div className="space-y-2">
             <Label>Broker Name</Label>
-            <Select value={form.brokerPersonName || 'Salih Karagoz'} onValueChange={(v) => set('brokerPersonName', v)}>
+            <Select value={form.brokerPersonName || 'Izzet Alev'} onValueChange={(v) => set('brokerPersonName', v)}>
               <SelectTrigger data-testid="broker-name-select"><SelectValue placeholder="Select broker name" /></SelectTrigger>
               <SelectContent>
                 {allUsers.filter(u => u.username !== 'pir.accounts').map(u => <SelectItem key={u.username} value={u.name}>{u.name}</SelectItem>)}

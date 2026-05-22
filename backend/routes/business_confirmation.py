@@ -279,7 +279,7 @@ def generate_bc_pdf(trade):
     if os.path.exists(STAMP_PATH):
         sig_rows.append(["", Image(STAMP_PATH, width=24 * mm, height=24 * mm)])
     sig_rows.append(["", Paragraph("_______________________________", sig_line)])
-    sig_rows.append(["", Paragraph("<b>Authorized Signature</b><br/>SALIH KARAGOZ<br/>PIR Grain and Pulses Ltd", sig_name)])
+    sig_rows.append(["", Paragraph("<b>Authorized Signature</b><br/>IZZET ALEV<br/>BA Ticaret Ltd", sig_name)])
 
     sig_tbl = Table(sig_rows, colWidths=[table_w * 0.55, table_w * 0.45])
     style_cmds = [

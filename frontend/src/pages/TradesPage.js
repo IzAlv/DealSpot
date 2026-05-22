@@ -669,8 +669,7 @@ export default function TradesPage() {
               <SelectTrigger className="w-[140px] shrink-0" data-testid="filter-broker-name"><SelectValue placeholder="Broker Name" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Brokers</SelectItem>
-                <SelectItem value="Salih Karagoz">Salih Karagoz</SelectItem>
-                <SelectItem value="Melisa Karagoz">Melisa Karagoz</SelectItem>
+                <SelectItem value="Izzet Alev">Izzet Alev</SelectItem>
               </SelectContent>
             </Select>
             <Select value={filterCoBroker} onValueChange={setFilterCoBroker}>

@@ -259,7 +259,7 @@ def generate_sa_pdf(trade):
     if os.path.exists(STAMP_PATH):
         sig_rows.append(["", Image(STAMP_PATH, width=28 * mm, height=28 * mm)])
     sig_rows.append(["", Paragraph("_______________________________", sig_line)])
-    sig_rows.append(["", Paragraph("<b>Authorized Signature</b><br/>SALIH KARAGOZ<br/>BA Ticaret Ltd", sig_name)])
+    sig_rows.append(["", Paragraph("<b>Authorized Signature</b><br/>IZZET ALEV<br/>BA Ticaret Ltd", sig_name)])
 
     sig_tbl = Table(sig_rows, colWidths=[W * 0.55, W * 0.45])
     style_cmds = [
