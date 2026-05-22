@@ -12,11 +12,11 @@ def seed_data():
     if users_col.count_documents({}) == 0:
         users_col.insert_many([
             {
-                "username": "salihkaragoz",
-                "password": pwd_context.hash("salih123"),
+                "username": "izzet.alev",
+                "password": pwd_context.hash("izzet123"),
                 "role": "admin",
-                "name": "Salih Karagoz",
-                "email": "salih@pirgrains.com",
+                "name": "Izzet Alev",
+                "email": "izzet.alev@gmail.com",
                 "status": "active",
                 "createdAt": datetime.utcnow()
             },
@@ -30,6 +30,18 @@ def seed_data():
                 "createdAt": datetime.utcnow()
             }
         ])
+    else:
+        old_user = users_col.find_one({"username": "salihkaragoz"})
+        if old_user:
+            users_col.update_one(
+                {"_id": old_user["_id"]},
+                {"$set": {
+                    "username": "izzet.alev",
+                    "password": pwd_context.hash("izzet123"),
+                    "name": "Izzet Alev",
+                    "email": "izzet.alev@gmail.com",
+                }}
+            )
 
     # Only seed if collections are empty — respect user changes from Settings
     if commodities_col.count_documents({}) == 0:
