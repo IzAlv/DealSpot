@@ -1,5 +1,6 @@
 import os
 import uuid
+import asyncio
 import base64
 from datetime import datetime
 from typing import Optional
@@ -20,49 +21,52 @@ router = APIRouter(prefix="/api/business-cards", tags=["business-cards"])
 
 
 async def extract_card_info(file_path: str) -> dict:
-    """Use GPT-4o vision to extract business card info from image."""
-    from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
-    import base64
+    """Use Gemini vision to extract business card info from image."""
+    import json
+    from google import genai
 
-    api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+    api_key = os.environ.get("GOOGLE_API_KEY", "")
     if not api_key:
         return {}
 
+    client = genai.Client(api_key=api_key)
+
     with open(file_path, "rb") as f:
-        img_b64 = base64.b64encode(f.read()).decode("utf-8")
+        image_bytes = f.read()
 
-    chat = LlmChat(
-        api_key=api_key,
-        session_id=f"card-ocr-{uuid.uuid4()}",
-        system_message=(
-            "You are a business card OCR assistant. Extract all information from the business card image "
-            "and return ONLY a JSON object with these fields: name, title, company, email, phone, mobile, website, address, city, country. "
-            "IMPORTANT RULES: "
-            "1) For city names, always use proper Title Case with correct Turkish characters (e.g. 'Gaziantep' not 'GAZİANTEP', 'İstanbul' not 'ISTANBUL'). "
-            "2) For country, ALWAYS infer from address/city/phone prefix/language. Use the local language name first: 'Türkiye' for Turkey, 'Deutschland' for Germany, etc. "
-            "3) Use Turkish special characters where appropriate (ç, ş, ğ, ı, ö, ü, İ). "
-            "4) If a field is not found, use an empty string. "
-            "Return ONLY valid JSON, no markdown."
-        )
-    ).with_model("openai", "gpt-4o")
+    import mimetypes
+    mime_type = mimetypes.guess_type(file_path)[0] or "image/jpeg"
 
-    image_content = ImageContent(image_base64=img_b64)
-    user_msg = UserMessage(
-        text="Extract all contact information from this business card image. Return only a JSON object.",
-        file_contents=[image_content]
+    prompt = (
+        "You are a business card OCR assistant. Extract all information from this business card image "
+        "and return ONLY a JSON object with these fields: name, title, company, email, phone, mobile, website, address, city, country. "
+        "IMPORTANT RULES: "
+        "1) For city names, always use proper Title Case with correct Turkish characters (e.g. 'Gaziantep' not 'GAZİANTEP', 'İstanbul' not 'ISTANBUL'). "
+        "2) For country, ALWAYS infer from address/city/phone prefix/language. Use the local language name first: 'Türkiye' for Turkey, 'Deutschland' for Germany, etc. "
+        "3) Use Turkish special characters where appropriate (ç, ş, ğ, ı, ö, ü, İ). "
+        "4) If a field is not found, use an empty string. "
+        "Return ONLY valid JSON, no markdown."
     )
 
-    response = await chat.send_message(user_msg)
+    response = await asyncio.to_thread(
+        client.models.generate_content,
+        model="gemini-2.5-flash",
+        contents=[
+            genai.types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+            prompt,
+        ],
+    )
 
-    import json
+    text = response.text.strip()
     try:
-        clean = response.strip()
-        if clean.startswith("```"):
-            clean = clean.split("\n", 1)[1] if "\n" in clean else clean[3:]
-            clean = clean.rsplit("```", 1)[0]
-        return json.loads(clean)
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+            text = text.rsplit("```", 1)[0].strip()
+        if text.startswith("json"):
+            text = text[4:].strip()
+        return json.loads(text)
     except Exception:
-        return {"rawText": response}
+        return {"rawText": text}
 
 
 @router.get("")

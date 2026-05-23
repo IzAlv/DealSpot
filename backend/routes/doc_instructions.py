@@ -332,7 +332,7 @@ async def send_di_email(di_id: str, req: DiSendEmailRequest = DiSendEmailRequest
 @router.post("/extract-from-pdf/{trade_id}")
 async def extract_di_from_pdf(trade_id: str, user=Depends(get_current_user)):
     """Extract Documentary Instruction fields from uploaded DI PDF using AI"""
-    from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
+    from google import genai
 
     trade = trades_col.find_one({"_id": ObjectId(trade_id)})
     if not trade:
@@ -346,17 +346,18 @@ async def extract_di_from_pdf(trade_id: str, user=Depends(get_current_user)):
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="DI file not found on disk")
 
-    api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+    api_key = os.environ.get("GOOGLE_API_KEY", "")
     if not api_key:
-        raise HTTPException(status_code=500, detail="LLM API key not configured")
+        raise HTTPException(status_code=500, detail="GOOGLE_API_KEY not configured")
 
-    # Get existing trade data for context
+    client = genai.Client(api_key=api_key)
+
     seller_name = trade.get("sellerName", "")
     buyer_name = trade.get("buyerName", "")
     vessel_name = trade.get("vesselName", "")
     commodity = trade.get("commodityDisplayName") or trade.get("commodityName", "")
 
-    prompt = f"""Extract the following fields from this Documentary Instruction PDF document. 
+    prompt = f"""Extract the following fields from this Documentary Instruction PDF document.
 Return ONLY valid JSON with these keys (use empty string if not found):
 
 {{
@@ -383,24 +384,19 @@ Context: Seller={seller_name}, Buyer={buyer_name}, Vessel={vessel_name}, Commodi
 Extract ALL document requirements listed. Return ONLY the JSON, no markdown, no explanation."""
 
     try:
-        chat = LlmChat(
-            api_key=api_key,
-            session_id=f"di-extract-{trade_id}",
-            system_message="You are a document data extraction specialist. Extract structured data from documentary instruction PDFs. Return only valid JSON."
-        ).with_model("gemini", "gemini-2.5-flash")
+        with open(filepath, "rb") as f:
+            pdf_bytes = f.read()
 
-        pdf_file = FileContentWithMimeType(
-            file_path=filepath,
-            mime_type="application/pdf"
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model="gemini-2.5-flash",
+            contents=[
+                genai.types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
+                prompt,
+            ],
         )
 
-        response = await chat.send_message(UserMessage(
-            text=prompt,
-            file_contents=[pdf_file]
-        ))
-
-        # Parse response - strip markdown if present
-        text = response.strip()
+        text = response.text.strip()
         if text.startswith("```"):
             text = text.split("\n", 1)[1] if "\n" in text else text[3:]
             if text.endswith("```"):
