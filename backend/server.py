@@ -36,7 +36,12 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title="PIR Grain & Pulses API", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+_cors_env = os.environ.get("CORS_ORIGINS", "")
+CORS_ORIGINS = [o.strip() for o in _cors_env.split(",") if o.strip()] if _cors_env else [
+    "https://practical-possibility-production-5c24.up.railway.app",
+]
+app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.mount("/api/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.mount("/api/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
 
