@@ -69,13 +69,22 @@ class PartnerCreate(BaseModel):
     phone: Optional[str] = None
     whatsapp: Optional[str] = None
     type: Optional[list] = ["buyer"]
+    kind: Optional[str] = "trading"
     origins: Optional[list] = []
     tradeContacts: Optional[list] = []
     executionContacts: Optional[list] = []
     departments: Optional[list] = []
     notes: Optional[str] = None
+    notesTimeline: Optional[list] = []
     taxIdNo: Optional[str] = None
     taxOffice: Optional[str] = None
+    website: Optional[str] = None
+    companyDomain: Optional[str] = None
+    linkedinUrl: Optional[str] = None
+    industry: Optional[str] = None
+    description: Optional[str] = None
+    hubspotId: Optional[str] = None
+    lifecycleStage: Optional[str] = None
 
 
 class VesselCreate(BaseModel):

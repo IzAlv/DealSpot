@@ -50,6 +50,13 @@ def serialize_doc(doc):
     return doc
 
 
+def ensure_indexes():
+    partners_col.create_index("hubspotId", unique=True, sparse=True)
+    partners_col.create_index("companyDomain", sparse=True)
+    partners_col.create_index("kind")
+    partners_col.create_index("type")
+
+
 def create_notification(ntype, message, entity_ref=None, username=None, display_name=None):
     notifications_col.insert_one({
         "type": ntype,

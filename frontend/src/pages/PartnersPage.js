@@ -16,17 +16,36 @@ import { toast } from 'sonner';
 import { Separator } from '../components/ui/separator';
 
 const TYPE_CONFIG = {
-  seller: { label: 'Seller', color: 'bg-blue-100 text-blue-800' },
-  buyer: { label: 'Buyer', color: 'bg-green-100 text-green-800' },
-  'co-broker': { label: 'Co-Broker', color: 'bg-amber-100 text-amber-800' },
+  seller: { label: 'Seller', color: 'bg-blue-100 text-blue-800', kind: 'trading' },
+  buyer: { label: 'Buyer', color: 'bg-green-100 text-green-800', kind: 'trading' },
+  'co-broker': { label: 'Co-Broker', color: 'bg-amber-100 text-amber-800', kind: 'trading' },
+  shipping_agent: { label: 'Shipping Agent', color: 'bg-cyan-100 text-cyan-800', kind: 'service' },
+  surveyor: { label: 'Surveyor', color: 'bg-teal-100 text-teal-800', kind: 'service' },
+  customs: { label: 'Customs', color: 'bg-indigo-100 text-indigo-800', kind: 'service' },
+  logistics: { label: 'Logistics', color: 'bg-sky-100 text-sky-800', kind: 'service' },
+  bank: { label: 'Bank', color: 'bg-emerald-100 text-emerald-800', kind: 'service' },
+  lawyer: { label: 'Lawyer', color: 'bg-rose-100 text-rose-800', kind: 'service' },
+  inspection: { label: 'Inspection', color: 'bg-fuchsia-100 text-fuchsia-800', kind: 'service' },
+  insurance: { label: 'Insurance', color: 'bg-orange-100 text-orange-800', kind: 'service' },
+  association: { label: 'Association', color: 'bg-stone-100 text-stone-800', kind: 'service' },
+  other: { label: 'Other', color: 'bg-gray-100 text-gray-800', kind: 'network' },
 };
+
+const KIND_OPTIONS = [
+  { value: 'trading', label: 'Trading' },
+  { value: 'service', label: 'Service' },
+  { value: 'network', label: 'Network' },
+];
 
 const emptyContact = { name: '', email: '', phone: '' };
 
 const emptyForm = {
   companyName: '', companyCode: '', contactPerson: '', address: '', city: '', country: '',
-  email: '', phone: '', whatsapp: '', type: [], origins: '', notes: '',
+  email: '', phone: '', whatsapp: '', type: [], kind: 'trading', origins: '', notes: '',
   taxIdNo: '', taxOffice: '',
+  website: '', companyDomain: '', linkedinUrl: '', industry: '', description: '',
+  hubspotId: '', lifecycleStage: '',
+  notesTimeline: [],
   tradeContacts: [], executionContacts: [],
 };
 
@@ -132,10 +151,14 @@ export default function PartnersPage({ filterType }) {
 
   const filtered = useMemo(() => {
     let list = partners;
-    if (tab !== 'all') list = list.filter(p => {
-      const types = Array.isArray(p.type) ? p.type : [p.type];
-      return types.includes(tab);
-    });
+    if (tab === 'service' || tab === 'network' || tab === 'trading') {
+      list = list.filter(p => (p.kind || 'trading') === tab);
+    } else if (tab !== 'all') {
+      list = list.filter(p => {
+        const types = Array.isArray(p.type) ? p.type : [p.type];
+        return types.includes(tab);
+      });
+    }
     if (search) {
       const q = normalizeTR(search);
       list = list.filter(p => normalizeTR(p.companyName).includes(q) || normalizeTR(p.contactPerson).includes(q) || normalizeTR(p.email).includes(q) || normalizeTR(p.companyCode).includes(q));
@@ -143,12 +166,18 @@ export default function PartnersPage({ filterType }) {
     return list;
   }, [partners, tab, search]);
 
-  const counts = useMemo(() => ({
-    all: partners.length,
-    seller: partners.filter(p => { const t = Array.isArray(p.type) ? p.type : [p.type]; return t.includes('seller'); }).length,
-    buyer: partners.filter(p => { const t = Array.isArray(p.type) ? p.type : [p.type]; return t.includes('buyer'); }).length,
-    'co-broker': partners.filter(p => { const t = Array.isArray(p.type) ? p.type : [p.type]; return t.includes('co-broker'); }).length,
-  }), [partners]);
+  const counts = useMemo(() => {
+    const byKind = (k) => partners.filter(p => (p.kind || 'trading') === k).length;
+    const byType = (t) => partners.filter(p => { const ts = Array.isArray(p.type) ? p.type : [p.type]; return ts.includes(t); }).length;
+    return {
+      all: partners.length,
+      seller: byType('seller'),
+      buyer: byType('buyer'),
+      'co-broker': byType('co-broker'),
+      service: byKind('service'),
+      network: byKind('network'),
+    };
+  }, [partners]);
 
   const openCreate = () => {
     setEditingPartner(null);
@@ -163,8 +192,15 @@ export default function PartnersPage({ filterType }) {
       contactPerson: p.contactPerson || '', address: p.address || '',
       city: p.city || '', country: p.country || '',
       email: p.email || '', phone: p.phone || '', whatsapp: p.whatsapp || '',
-      type: Array.isArray(p.type) ? p.type : (p.type ? [p.type] : ['buyer']), origins: (p.origins || []).join(', '),
+      type: Array.isArray(p.type) ? p.type : (p.type ? [p.type] : ['buyer']),
+      kind: p.kind || 'trading',
+      origins: (p.origins || []).join(', '),
       notes: p.notes || '', taxIdNo: p.taxIdNo || '', taxOffice: p.taxOffice || '',
+      website: p.website || '', companyDomain: p.companyDomain || '',
+      linkedinUrl: p.linkedinUrl || '', industry: p.industry || '',
+      description: p.description || '', hubspotId: p.hubspotId || '',
+      lifecycleStage: p.lifecycleStage || '',
+      notesTimeline: p.notesTimeline || [],
       tradeContacts: (p.tradeContacts || []).map(c => ({ name: c.name || '', email: c.email || '', phone: c.phone || '' })),
       executionContacts: (p.executionContacts || []).map(c => ({ name: c.name || '', email: c.email || '', phone: c.phone || '' })),
     });
@@ -223,6 +259,8 @@ export default function PartnersPage({ filterType }) {
                   <TabsTrigger value="seller">Sellers ({counts.seller})</TabsTrigger>
                   <TabsTrigger value="buyer">Buyers ({counts.buyer})</TabsTrigger>
                   <TabsTrigger value="co-broker">Co-Brokers ({counts['co-broker']})</TabsTrigger>
+                  <TabsTrigger value="service">Services ({counts.service})</TabsTrigger>
+                  <TabsTrigger value="network">Network ({counts.network})</TabsTrigger>
                 </TabsList>
               </Tabs>
             )}
@@ -283,9 +321,18 @@ export default function PartnersPage({ filterType }) {
               <div className="col-span-2 space-y-2"><Label>Company Name *</Label><Input value={form.companyName} onChange={(e) => setForm({...form, companyName: e.target.value})} data-testid="partner-form-name" /></div>
               <div className="space-y-2"><Label>Company Code</Label><Input value={form.companyCode} onChange={(e) => setForm({...form, companyCode: e.target.value})} placeholder="e.g. BA" /></div>
               <div className="space-y-2">
+                <Label>Kind</Label>
+                <Select value={form.kind} onValueChange={(v) => setForm({ ...form, kind: v, type: [] })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {KIND_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-2 space-y-2">
                 <Label>Type</Label>
                 <div className="flex flex-wrap gap-3 pt-1" data-testid="partner-form-type">
-                  {Object.entries(TYPE_CONFIG).map(([key, cfg]) => {
+                  {Object.entries(TYPE_CONFIG).filter(([, cfg]) => cfg.kind === (form.kind || 'trading')).map(([key, cfg]) => {
                     const types = Array.isArray(form.type) ? form.type : [form.type];
                     const checked = types.includes(key);
                     return (
@@ -305,6 +352,11 @@ export default function PartnersPage({ filterType }) {
                   })}
                 </div>
               </div>
+              <div className="space-y-2"><Label>Industry</Label><Input value={form.industry} onChange={(e) => setForm({...form, industry: e.target.value})} placeholder="e.g. Food Production" /></div>
+              <div className="space-y-2"><Label>Website</Label><Input value={form.website} onChange={(e) => setForm({...form, website: e.target.value})} placeholder="https://example.com" /></div>
+              <div className="space-y-2"><Label>Company Domain</Label><Input value={form.companyDomain} onChange={(e) => setForm({...form, companyDomain: e.target.value})} placeholder="example.com" /></div>
+              <div className="space-y-2"><Label>LinkedIn</Label><Input value={form.linkedinUrl} onChange={(e) => setForm({...form, linkedinUrl: e.target.value})} placeholder="https://linkedin.com/company/..." /></div>
+              <div className="col-span-2 space-y-2"><Label>Description</Label><Input value={form.description} onChange={(e) => setForm({...form, description: e.target.value})} /></div>
               <div className="col-span-2 space-y-2"><Label>Address</Label><Input value={form.address} onChange={(e) => setForm({...form, address: e.target.value})} /></div>
               <div className="space-y-2"><Label>City</Label><Input value={form.city} onChange={(e) => setForm({...form, city: e.target.value})} /></div>
               <div className="space-y-2"><Label>Country</Label><Input value={form.country} onChange={(e) => setForm({...form, country: e.target.value})} /></div>
@@ -435,7 +487,39 @@ export default function PartnersPage({ filterType }) {
                   {detailPartner.notes && (
                     <div className="rounded-lg border p-3 space-y-1">
                       <div className="text-sm font-medium">Notes</div>
-                      <div className="text-sm text-muted-foreground">{detailPartner.notes}</div>
+                      <div className="text-sm text-muted-foreground whitespace-pre-wrap">{detailPartner.notes}</div>
+                    </div>
+                  )}
+
+                  {/* Notes Timeline (HubSpot-imported activities) */}
+                  {Array.isArray(detailPartner.notesTimeline) && detailPartner.notesTimeline.length > 0 && (
+                    <div className="rounded-lg border p-3 space-y-2">
+                      <div className="text-sm font-medium">Activity Timeline ({detailPartner.notesTimeline.length})</div>
+                      <div className="space-y-2 max-h-96 overflow-y-auto">
+                        {detailPartner.notesTimeline.slice().sort((a, b) => (b.ts || '').localeCompare(a.ts || '')).map((entry, i) => (
+                          <div key={i} className="border-l-2 border-primary/30 pl-3 py-1">
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <Badge variant="outline" className="text-[10px] capitalize">{entry.source || 'note'}</Badge>
+                              {entry.ts && <span>{new Date(entry.ts).toLocaleString()}</span>}
+                              {entry.author && <span>· {entry.author}</span>}
+                            </div>
+                            {entry.text && <div className="text-sm text-foreground mt-1 whitespace-pre-wrap">{entry.text}</div>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* CRM metadata */}
+                  {(detailPartner.website || detailPartner.linkedinUrl || detailPartner.industry || detailPartner.lifecycleStage) && (
+                    <div className="rounded-lg border p-3 space-y-1">
+                      <div className="text-sm font-medium">CRM</div>
+                      <div className="text-sm text-muted-foreground space-y-0.5">
+                        {detailPartner.industry && <div>Industry: {detailPartner.industry}</div>}
+                        {detailPartner.lifecycleStage && <div>Lifecycle: {detailPartner.lifecycleStage}</div>}
+                        {detailPartner.website && <div><a href={detailPartner.website} target="_blank" rel="noreferrer" className="text-primary hover:underline">{detailPartner.website}</a></div>}
+                        {detailPartner.linkedinUrl && <div><a href={detailPartner.linkedinUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">LinkedIn</a></div>}
+                      </div>
                     </div>
                   )}
                 </div>

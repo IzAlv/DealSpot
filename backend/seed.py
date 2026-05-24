@@ -3,12 +3,15 @@ import random
 
 from database import (
     users_col, trades_col, partners_col, vessels_col,
-    commodities_col, origins_col, ports_col, surveyors_col
+    commodities_col, origins_col, ports_col, surveyors_col,
+    ensure_indexes,
 )
 from auth import pwd_context
 
 
 def seed_data():
+    ensure_indexes()
+    partners_col.update_many({"kind": {"$exists": False}}, {"$set": {"kind": "trading"}})
     if users_col.count_documents({}) == 0:
         users_col.insert_many([
             {
