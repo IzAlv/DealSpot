@@ -51,10 +51,19 @@ def serialize_doc(doc):
 
 
 def ensure_indexes():
-    partners_col.create_index("hubspotId", unique=True, sparse=True)
-    partners_col.create_index("companyDomain", sparse=True)
-    partners_col.create_index("kind")
-    partners_col.create_index("type")
+    """Create partner indexes. Tolerates MongoDB errors (e.g. OutOfDiskSpace)
+    so a transient cluster issue does not block app startup."""
+    specs = [
+        ("hubspotId", {"unique": True, "sparse": True}),
+        ("companyDomain", {"sparse": True}),
+        ("kind", {}),
+        ("type", {}),
+    ]
+    for key, opts in specs:
+        try:
+            partners_col.create_index(key, **opts)
+        except Exception as e:
+            print(f"WARNING: ensure_indexes: skipping '{key}' ({e})", flush=True)
 
 
 def create_notification(ntype, message, entity_ref=None, username=None, display_name=None):
