@@ -16,7 +16,7 @@ from auth import get_current_user
 try:
     import resend
     resend.api_key = os.environ.get("RESEND_API_KEY", "")
-    SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "BA Ticaret <noreply@baticaret.com>")
+    SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "DealSpot <noreply@baticaret.com>")
 except ImportError:
     resend = None
     SENDER_EMAIL = ""
@@ -300,7 +300,7 @@ async def send_di_email(di_id: str, req: DiSendEmailRequest = DiSendEmailRequest
     <h3 style="color: #1A5276; border-bottom: 2px solid #1A5276; padding-bottom: 4px;">Address for Original Documents:</h3>
     <div style="border: 1px solid #ccc; padding: 10px; background: #f9fafb; white-space: pre-wrap; margin-bottom: 16px;">{doc.get('originalDocsAddress', '') or 'To be advised later.'}</div>
 
-    <br><p style="font-size: 11px; color: #999;">This email was sent from BA Ticaret Trading Platform.</p>
+    <br><p style="font-size: 11px; color: #999;">This email was sent from DealSpot.</p>
     </body></html>"""
 
     if not resend or not resend.api_key:

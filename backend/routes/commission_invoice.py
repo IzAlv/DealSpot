@@ -387,7 +387,7 @@ def generate_invoice_pdf(trade, invoice_number, invoice_date, issued_to_name, is
     if os.path.exists(STAMP_PATH):
         sig_rows.append(["", Image(STAMP_PATH, width=40*mm, height=25*mm)])
     sig_rows.append(["", Paragraph("_______________________________", sig_line)])
-    sig_rows.append(["", Paragraph("<b>Authorized Signature</b><br/>IZZET ALEV<br/>BA Ticaret Ltd", sig_name)])
+    sig_rows.append(["", Paragraph("<b>Authorized Signature</b><br/>IZZET ALEV<br/>DealSpot Ltd", sig_name)])
 
     sig_tbl = Table(sig_rows, colWidths=[W*0.55, W*0.45], rowHeights=None)
     style_cmds = [
@@ -544,7 +544,7 @@ class SendCommissionInvoiceRequest(BaseModel):
 @router.post("/send-email")
 async def send_commission_invoice_email(req: SendCommissionInvoiceRequest, user=Depends(get_current_user)):
     resend.api_key = os.environ.get("RESEND_API_KEY", "")
-    SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "BA Ticaret Ltd <noreply@baticaret.com>")
+    SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "DealSpot Ltd <noreply@baticaret.com>")
 
     trade = trades_col.find_one({"_id": ObjectId(req.tradeId)})
     if not trade:
@@ -598,7 +598,7 @@ async def send_commission_invoice_email(req: SendCommissionInvoiceRequest, user=
         <p>Please find attached the Commission Invoice for contract <b>{contract_num}</b>, vessel <b>{vessel_name}</b>.</p>
         <p>We also take this opportunity to thank you for your continued business and cooperation.</p>
         <p style="margin-top:8px;">Best Regards,</p>
-        <p><b>PIR Grain and Pulses Ltd</b></p>
+        <p><b>DealSpot Ltd</b></p>
     </div>
     """
 

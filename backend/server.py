@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
     seed_data()
     yield
 
-app = FastAPI(title="PIR Grain & Pulses API", lifespan=lifespan)
+app = FastAPI(title="DealSpot API", lifespan=lifespan)
 
 _cors_env = os.environ.get("CORS_ORIGINS", "")
 CORS_ORIGINS = [o.strip() for o in _cors_env.split(",") if o.strip()] if _cors_env else [
@@ -77,7 +77,7 @@ app.include_router(doc_instructions_router)
 
 @app.get("/api/health")
 def health():
-    return {"status": "healthy", "app": "PIR Grain & Pulses"}
+    return {"status": "healthy", "app": "DealSpot"}
 
 
 @app.get("/api/config/active-url")

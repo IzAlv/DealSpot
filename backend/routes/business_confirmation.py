@@ -141,7 +141,7 @@ def generate_bc_pdf(trade):
     if gafta_display.upper().startswith("GAFTA "):
         gafta_display = gafta_display[6:]
 
-    broker_text = partner_text(broker) if broker else "PIR Grain and Pulses Ltd.\nBlv. Tsarigradsko Shose No:73\nPlovdiv / Bulgaria, ZIP: 4000"
+    broker_text = partner_text(broker) if broker else "DealSpot Ltd."
 
     # Styles
     s_label = ParagraphStyle('Label', fontName='FreeSansBold', fontSize=7.5, textColor=PIR_GREEN, leading=9)
@@ -169,7 +169,7 @@ def generate_bc_pdf(trade):
     data = [
         row("DATE", contract_date),
         row("CONTRACT NO", contract_no),
-        row("PIR GRAIN REF. NO", pir_ref_no),
+        row("DEALSPOT REF. NO", pir_ref_no),
         [Paragraph("SELLERS", s_label), Paragraph(partner_text(seller).replace("\n", "<br/>"), s_val)],
         [Paragraph("BUYERS", s_label), Paragraph(partner_text(buyer).replace("\n", "<br/>"), s_val)],
         [Paragraph("BROKERS", s_label), Paragraph(broker_text.replace("\n", "<br/>"), s_val)],
@@ -279,7 +279,7 @@ def generate_bc_pdf(trade):
     if os.path.exists(STAMP_PATH):
         sig_rows.append(["", Image(STAMP_PATH, width=24 * mm, height=24 * mm)])
     sig_rows.append(["", Paragraph("_______________________________", sig_line)])
-    sig_rows.append(["", Paragraph("<b>Authorized Signature</b><br/>IZZET ALEV<br/>BA Ticaret Ltd", sig_name)])
+    sig_rows.append(["", Paragraph("<b>Authorized Signature</b><br/>IZZET ALEV<br/>DealSpot Ltd", sig_name)])
 
     sig_tbl = Table(sig_rows, colWidths=[table_w * 0.55, table_w * 0.45])
     style_cmds = [
@@ -297,7 +297,7 @@ def generate_bc_pdf(trade):
     # Footer
     story.append(HRFlowable(width="100%", thickness=1, color=PIR_GREEN, spaceAfter=1 * mm))
     story.append(Paragraph(
-        "PIR Grain &amp; Pulses Ltd.",
+        "DealSpot Ltd.",
         ParagraphStyle('Foot', fontName='FreeSans', fontSize=7, textColor=GREY_TEXT, alignment=TA_CENTER)
     ))
 

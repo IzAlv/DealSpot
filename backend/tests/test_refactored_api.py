@@ -1,5 +1,5 @@
 """
-Backend API Tests for PIR Grain & Pulses - Refactored Modular Backend
+Backend API Tests for DealSpot - Refactored Modular Backend
 Tests all API endpoints after refactoring from monolithic server.py to modular structure.
 """
 import pytest
@@ -22,7 +22,7 @@ class TestHealthAndAuth:
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "healthy"
-        assert data["app"] == "PIR Grain & Pulses"
+        assert data["app"] == "DealSpot"
         print("PASS: Health endpoint working")
     
     def test_login_admin_success(self):

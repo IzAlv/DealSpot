@@ -136,7 +136,7 @@ def generate_sa_pdf(trade):
     if os.path.exists(LOGO_PATH):
         logo_cell.append(Image(LOGO_PATH, width=38 * mm, height=17 * mm))
     else:
-        logo_cell.append(Paragraph("BA Ticaret", ParagraphStyle('FL', fontName=FB, fontSize=14, textColor=GREEN)))
+        logo_cell.append(Paragraph("DealSpot", ParagraphStyle('FL', fontName=FB, fontSize=14, textColor=GREEN)))
 
     header_tbl = Table([[logo_cell, ""]], colWidths=[W * 0.50, W * 0.50])
     header_tbl.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE')]))
@@ -259,7 +259,7 @@ def generate_sa_pdf(trade):
     if os.path.exists(STAMP_PATH):
         sig_rows.append(["", Image(STAMP_PATH, width=28 * mm, height=28 * mm)])
     sig_rows.append(["", Paragraph("_______________________________", sig_line)])
-    sig_rows.append(["", Paragraph("<b>Authorized Signature</b><br/>IZZET ALEV<br/>BA Ticaret Ltd", sig_name)])
+    sig_rows.append(["", Paragraph("<b>Authorized Signature</b><br/>IZZET ALEV<br/>DealSpot Ltd", sig_name)])
 
     sig_tbl = Table(sig_rows, colWidths=[W * 0.55, W * 0.45])
     style_cmds = [
@@ -277,7 +277,7 @@ def generate_sa_pdf(trade):
     # ========== FOOTER ==========
     story.append(HRFlowable(width="100%", thickness=1, color=GREEN, spaceAfter=2 * mm))
     story.append(Paragraph(
-        "BA Ticaret Ltd.",
+        "DealSpot Ltd.",
         ParagraphStyle('Foot', fontName=F, fontSize=7, textColor=GREY, alignment=TA_CENTER)
     ))
 

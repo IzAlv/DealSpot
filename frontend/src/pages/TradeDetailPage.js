@@ -433,7 +433,7 @@ export default function TradeDetailPage() {
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-base">Contract Information</CardTitle></CardHeader>
               <CardContent className="space-y-4 text-sm">
-                <div className="flex justify-between"><span className="text-muted-foreground">BA Ticaret Ref. No</span><span className="font-medium">{trade.referenceNumber || '-'}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">DealSpot Ref. No</span><span className="font-medium">{trade.referenceNumber || '-'}</span></div>
                 <Separator />
                 <div className="flex justify-between"><span className="text-muted-foreground">Seller Sales Contract No.</span><span className="font-medium">{trade.sellerContractNumber || trade.pirContractNumber || trade.contractNumber || '-'}</span></div>
                 <Separator />
@@ -649,7 +649,7 @@ export default function TradeDetailPage() {
             <div className="p-3 rounded-lg bg-muted/50 text-sm space-y-1">
               <p><strong>Document:</strong> {emailDialog.docLabel}</p>
               <p><strong>Trade:</strong> {trade?.referenceNumber} ({trade?.sellerContractNumber})</p>
-              <p><strong>From:</strong> BA Ticaret (onboarding@resend.dev)</p>
+              <p><strong>From:</strong> DealSpot (onboarding@resend.dev)</p>
               <p className="text-xs text-amber-600">Note: Test mode — emails can only be sent to verified addresses until domain is verified on Resend.</p>
             </div>
           </div>

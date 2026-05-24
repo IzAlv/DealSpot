@@ -67,7 +67,7 @@ class TestHealthAndConfig:
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "healthy"
-        assert data["app"] == "PIR Grain & Pulses"
+        assert data["app"] == "DealSpot"
         print("✓ Health endpoint working")
     
     def test_active_url_config(self):

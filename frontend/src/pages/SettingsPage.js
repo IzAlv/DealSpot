@@ -281,7 +281,7 @@ export default function SettingsPage() {
               ) : (
                 <div key={key} className="space-y-2">
                   <Label className="capitalize">{dialogType === 'vendors' ? (key === 'name' ? 'Vendor Name' : key === 'type' ? 'Vendor Type' : key.replace(/([A-Z])/g, ' $1')) : dialogType === 'bank-accounts' ? (key === 'accountName' ? 'Account Name' : key === 'bankName' ? 'Bank Name' : key === 'iban' ? 'IBAN' : key === 'bic' ? 'BIC / SWIFT' : key.replace(/([A-Z])/g, ' $1')) : key.replace(/([A-Z])/g, ' $1')}</Label>
-                  <Input type={key === 'password' ? 'password' : 'text'} value={val || ''} onChange={(e) => setDialogForm({...dialogForm, [key]: e.target.value})} placeholder={dialogType === 'vendors' ? (key === 'name' ? 'Enter vendor name' : key === 'type' ? 'e.g. Logistics, Insurance, Surveyor' : key) : dialogType === 'bank-accounts' ? (key === 'accountName' ? 'e.g. BA Ticaret Main Account' : key === 'bankName' ? 'e.g. Deutsche Bank' : key === 'iban' ? 'e.g. TR00 0000 0000 0000 0000 00' : key === 'bic' ? 'e.g. DEUTDEFF' : key) : key} />
+                  <Input type={key === 'password' ? 'password' : 'text'} value={val || ''} onChange={(e) => setDialogForm({...dialogForm, [key]: e.target.value})} placeholder={dialogType === 'vendors' ? (key === 'name' ? 'Enter vendor name' : key === 'type' ? 'e.g. Logistics, Insurance, Surveyor' : key) : dialogType === 'bank-accounts' ? (key === 'accountName' ? 'e.g. DealSpot Main Account' : key === 'bankName' ? 'e.g. Deutsche Bank' : key === 'iban' ? 'e.g. TR00 0000 0000 0000 0000 00' : key === 'bic' ? 'e.g. DEUTDEFF' : key) : key} />
                 </div>
               )
             ))}

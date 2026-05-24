@@ -1,5 +1,5 @@
 """
-Regression tests for PIR Grain & Pulses Dashboard
+Regression tests for DealSpot Dashboard
 Testing after massive UI changes to VesselExecutionPage, AccountingPage, 
 PortLineupsPage, CommissionsPage, and various dark mode fixes.
 """
@@ -57,7 +57,7 @@ class TestHealthEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "healthy"
-        assert data["app"] == "PIR Grain & Pulses"
+        assert data["app"] == "DealSpot"
 
 
 class TestTradesEndpoints:
