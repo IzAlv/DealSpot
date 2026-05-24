@@ -71,7 +71,9 @@ def normalize_name(s):
 def classify(industry):
     if not industry:
         return "network", "other"
-    ind = industry.lower()
+    # HubSpot industries arrive as SCREAMING_SNAKE_CASE; normalize so
+    # multi-word patterns like "capital markets" match "CAPITAL_MARKETS".
+    ind = industry.lower().replace("_", " ")
     for substr, kind, type_ in INDUSTRY_MAP:
         if substr in ind:
             return kind, type_
