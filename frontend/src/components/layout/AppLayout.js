@@ -130,7 +130,7 @@ export default function AppLayout() {
     '/market-data': { title: 'Market Data' },
     '/doc-instructions': { title: 'Documentary Instructions' },
     '/port-lineups': { title: 'Port Line-Ups' },
-    '/business-cards': { title: 'Business Cards' },
+    '/my-network': { title: 'My Network' },
   };
   const currentPage = PAGE_TITLES[location.pathname] || (location.pathname.startsWith('/trades/') ? { title: location.pathname.includes('/edit') ? 'Edit Contract' : location.pathname === '/trades/new' ? 'New Contract' : 'Contract Details' } : location.pathname.startsWith('/documents/') ? { title: 'Vessel Execution' } : { title: '' });
 

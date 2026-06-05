@@ -18,7 +18,7 @@ const mainNavItems = [
   { title: 'Accounting', href: '/omega', icon: Calculator, roles: ['admin', 'accountant'] },
   { title: 'Reports', href: '/reports', icon: BarChart3, roles: ['admin', 'user'] },
   { title: 'Vessels', href: '/vessels', icon: Ship, roles: ['admin', 'user'] },
-  { title: 'Business Cards', href: '/business-cards', icon: CreditCard, roles: ['admin', 'user'] },
+  { title: 'My Network', href: '/my-network', icon: CreditCard, roles: ['admin', 'user'] },
   { title: 'Port Line-Ups', href: '/port-lineups', icon: Anchor, roles: ['admin', 'user'] },
 ];
 
@@ -43,7 +43,7 @@ export default function Sidebar() {
     { title: 'Calendar', href: '/calendar', icon: CalendarDays, roles: ['admin', 'user'] },
     { title: 'Reports', href: '/reports', icon: BarChart3, roles: ['admin', 'user'] },
     { title: 'Vessels', href: '/vessels', icon: Ship, roles: ['admin', 'user'] },
-    { title: 'Business Cards', href: '/business-cards', icon: CreditCard, roles: ['admin', 'user'] },
+    { title: 'My Network', href: '/my-network', icon: CreditCard, roles: ['admin', 'user'] },
     { title: 'Port Line-Ups', href: '/port-lineups', icon: Anchor, roles: ['admin', 'user'] },
   ];
 

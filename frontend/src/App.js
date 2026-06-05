@@ -42,7 +42,7 @@ function App() {
             <Route path="/commissions" element={<CommissionsPage />} />
             <Route path="/omega" element={<AccountingPage />} />
             <Route path="/reports" element={<ReportsPage />} />
-            <Route path="/business-cards" element={<BusinessCardsPage />} />
+            <Route path="/my-network" element={<BusinessCardsPage />} />
             <Route path="/port-lineups" element={<PortLineupsPage />} />
             <Route path="/market-data" element={<MarketDataPage />} />
             <Route path="/doc-instructions" element={<DocInstructionsPage />} />
