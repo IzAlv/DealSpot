@@ -5,12 +5,13 @@ import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
-import { Plus, Search, Mail, Phone, Pencil, Trash2, Loader2, Eye, Building2, User, MessageCircle, Globe, UserPlus, Briefcase, X, FileText } from 'lucide-react';
+import { Plus, Search, Mail, Phone, Pencil, Trash2, Loader2, Eye, Building2, User, MessageCircle, Globe, UserPlus, Briefcase, X, FileText, Send } from 'lucide-react';
 import { normalizeTR } from '../lib/utils-tr';
 import { toast } from 'sonner';
 import { Separator } from '../components/ui/separator';
@@ -34,7 +35,7 @@ const TYPE_CONFIG = {
 const KIND_OPTIONS = [
   { value: 'trading', label: 'Trading' },
   { value: 'service', label: 'Service' },
-  { value: 'network', label: 'Network' },
+  { value: 'network', label: 'My Network' },
 ];
 
 const emptyContact = { name: '', email: '', phone: '' };
@@ -127,6 +128,8 @@ export default function PartnersPage({ filterType }) {
   const [form, setForm] = useState({ ...emptyForm });
   const [saving, setSaving] = useState(false);
   const [detailPartner, setDetailPartner] = useState(null);
+  const [newNote, setNewNote] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const fetchPartners = useCallback(async () => {
@@ -234,6 +237,23 @@ export default function PartnersPage({ filterType }) {
     catch (err) { toast.error('Failed to delete'); }
   };
 
+  const handleAddNote = async () => {
+    const text = newNote.trim();
+    if (!detailPartner || !text) return;
+    setSavingNote(true);
+    try {
+      const res = await api.post(`/api/partners/${detailPartner.id}/notes`, { text });
+      setDetailPartner(res.data);
+      setPartners(prev => prev.map(p => (p.id === res.data.id ? res.data : p)));
+      setNewNote('');
+      toast.success('Note added');
+    } catch (err) {
+      toast.error('Failed to add note');
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -260,7 +280,7 @@ export default function PartnersPage({ filterType }) {
                   <TabsTrigger value="buyer">Buyers ({counts.buyer})</TabsTrigger>
                   <TabsTrigger value="co-broker">Co-Brokers ({counts['co-broker']})</TabsTrigger>
                   <TabsTrigger value="service">Services ({counts.service})</TabsTrigger>
-                  <TabsTrigger value="network">Network ({counts.network})</TabsTrigger>
+                  <TabsTrigger value="network">My Network ({counts.network})</TabsTrigger>
                 </TabsList>
               </Tabs>
             )}
@@ -392,7 +412,7 @@ export default function PartnersPage({ filterType }) {
       </Dialog>
 
       {/* Business Card / Detail Dialog */}
-      <Dialog open={!!detailPartner} onOpenChange={() => setDetailPartner(null)}>
+      <Dialog open={!!detailPartner} onOpenChange={(open) => { if (!open) { setDetailPartner(null); setNewNote(''); } }}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto flex flex-col">
           {detailPartner && (
             <>
@@ -490,6 +510,29 @@ export default function PartnersPage({ filterType }) {
                       <div className="text-sm text-muted-foreground whitespace-pre-wrap">{detailPartner.notes}</div>
                     </div>
                   )}
+
+                  {/* Manual note entry */}
+                  <div className="rounded-lg border p-3 space-y-2">
+                    <div className="text-sm font-medium">Add Note</div>
+                    <Textarea
+                      value={newNote}
+                      onChange={(e) => setNewNote(e.target.value)}
+                      rows={3}
+                      placeholder="Add a call note, meeting update, or follow-up..."
+                      data-testid="partner-add-note-textarea"
+                    />
+                    <div className="flex justify-end">
+                      <Button
+                        size="sm"
+                        onClick={handleAddNote}
+                        disabled={savingNote || !newNote.trim()}
+                        data-testid="partner-add-note-button"
+                      >
+                        {savingNote ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+                        Add Note
+                      </Button>
+                    </div>
+                  </div>
 
                   {/* Notes Timeline (HubSpot-imported activities) */}
                   {Array.isArray(detailPartner.notesTimeline) && detailPartner.notesTimeline.length > 0 && (

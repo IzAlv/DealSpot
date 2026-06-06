@@ -6,7 +6,7 @@ from bson import ObjectId
 
 from database import partners_col, serialize_doc, create_notification
 from auth import require_roles
-from models import PartnerCreate
+from models import PartnerCreate, PartnerNoteCreate
 
 from pymongo import collation as pymongo_collation
 
@@ -57,6 +57,30 @@ def update_partner(partner_id: str, partner: PartnerCreate, user=Depends(non_acc
     partners_col.update_one({"_id": ObjectId(partner_id)}, {"$set": data})
     updated = partners_col.find_one({"_id": ObjectId(partner_id)})
     create_notification("partner", f"Counterparty updated: {updated.get('companyName', '')}", partner_id, user.get("username"))
+    return serialize_doc(updated)
+
+
+@router.post("/{partner_id}/notes")
+def add_partner_note(partner_id: str, note: PartnerNoteCreate, user=Depends(non_accountant)):
+    text = note.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Note text is required")
+
+    entry = {
+        "ts": datetime.utcnow().isoformat(),
+        "source": "manual",
+        "author": user.get("displayName") or user.get("username") or "DealSpot",
+        "text": text,
+    }
+    result = partners_col.update_one(
+        {"_id": ObjectId(partner_id)},
+        {"$push": {"notesTimeline": entry}, "$set": {"updatedAt": datetime.utcnow()}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Partner not found")
+
+    updated = partners_col.find_one({"_id": ObjectId(partner_id)})
+    create_notification("partner", f"Note added: {updated.get('companyName', '')}", partner_id, user.get("username"))
     return serialize_doc(updated)
 
 

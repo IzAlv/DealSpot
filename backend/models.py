@@ -87,6 +87,10 @@ class PartnerCreate(BaseModel):
     lifecycleStage: Optional[str] = None
 
 
+class PartnerNoteCreate(BaseModel):
+    text: str
+
+
 class VesselCreate(BaseModel):
     name: str
     imoNumber: Optional[str] = None
