@@ -30,7 +30,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="mx-auto mb-4">
-            <img src="/ba-ticaret-logo.png" alt="DealSpot" className="h-24 w-auto mx-auto object-contain" />
+            <img src="/dealspot-logo.png" alt="DealSpot" className="h-24 w-auto mx-auto object-contain" />
           </div>
           <CardTitle className="text-2xl" style={{ color: BA_NAVY }} data-testid="login-title">
             DealSpot

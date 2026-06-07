@@ -107,7 +107,7 @@ export default function Sidebar() {
           </button>
         ) : null}
         <div className={cn('flex-1 flex justify-center', collapsed && 'max-md:flex md:hidden')}>
-          <img src="/ba-ticaret-logo.png" alt="DealSpot" className="h-20 w-auto object-contain" />
+          <img src="/dealspot-logo.png" alt="DealSpot" className="h-20 w-auto object-contain" />
         </div>
         {/* Desktop: collapse toggle */}
         {!collapsed && (

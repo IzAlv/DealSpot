@@ -220,7 +220,7 @@ async def send_di_email(di_id: str, req: DiSendEmailRequest = DiSendEmailRequest
             pass
 
     # Load logo for CID inline attachment
-    logo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "ba-ticaret-logo.png")
+    logo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dealspot-logo.png")
     attachments = []
     logo_html = ""
     if os.path.exists(logo_path):

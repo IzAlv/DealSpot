@@ -34,7 +34,7 @@ GREEN_MED = colors.HexColor("#D4E8DA")
 DARK = colors.HexColor("#1A1A1A")
 GREY = colors.HexColor("#666666")
 BORDER = colors.HexColor("#E0E0E0")
-LOGO_PATH = os.path.join(os.path.dirname(__file__), "..", "ba-ticaret-logo.png")
+LOGO_PATH = os.path.join(os.path.dirname(__file__), "..", "dealspot-logo.png")
 STAMP_PATH = os.path.join(os.path.dirname(__file__), "..", "pir-stamp-signature.png")
 
 

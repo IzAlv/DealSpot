@@ -37,7 +37,7 @@ BA_NAVY_MED = colors.HexColor("#C8DAE8")
 DARK_TEXT = colors.HexColor("#1A1A1A")
 GREY_TEXT = colors.HexColor("#666666")
 LIGHT_BORDER = colors.HexColor("#D0D0D0")
-LOGO_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "ba-ticaret-logo.png")
+LOGO_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dealspot-logo.png")
 
 BA_COMPANY = {
     "name": "BA TICARET LTD",
@@ -582,7 +582,7 @@ async def send_commission_invoice_email(req: SendCommissionInvoiceRequest, user=
     subject = f"Commission Invoice - {contract_num} - {qty_str} Mts {commodity_display} - {vessel_name}"
 
     # Load logo as CID inline attachment (base64 data URI blocked by most email clients)
-    logo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "ba-ticaret-logo.png")
+    logo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dealspot-logo.png")
     attachments = []
     logo_html = ""
     if os.path.exists(logo_path):

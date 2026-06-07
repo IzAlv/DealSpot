@@ -485,7 +485,7 @@ export default function DocInstructionsPage({ filterTradeId, embedded } = {}) {
               <CardContent>
                 <div ref={previewRef} className="text-sm leading-relaxed space-y-4">
                   <div style={{ textAlign: 'center', marginTop: '-16px', marginBottom: '-12px' }}>
-                    <img src="/ba-ticaret-logo.png" alt="DealSpot" crossOrigin="anonymous" style={{ height: '240px', margin: '0 auto' }} onError={(e) => { e.target.style.display = 'none'; }} />
+                    <img src="/dealspot-logo.png" alt="DealSpot" crossOrigin="anonymous" style={{ height: '240px', margin: '0 auto' }} onError={(e) => { e.target.style.display = 'none'; }} />
                   </div>
                   {(() => {
                     const t = trades.find(tr => tr.id === previewDi.tradeId);

@@ -309,7 +309,12 @@ export default function PartnersPage({ filterType }) {
                   ) : filtered.map((p) => (
                     <TableRow key={p.id}>
                       <TableCell className="!text-center">
-                        <div className="font-medium">{p.companyName}</div>
+                        <button
+                          className="font-medium text-primary hover:underline hover:text-primary/80 cursor-pointer bg-transparent border-none p-0"
+                          onClick={() => setDetailPartner(p)}
+                        >
+                          {p.companyName}
+                        </button>
                       </TableCell>
                       <TableCell className="text-sm !text-center">{p.companyCode || '-'}</TableCell>
                       <TableCell className="!text-center"><div className="flex flex-wrap gap-1 justify-center">{(Array.isArray(p.type) ? p.type : [p.type]).map((t, i) => <Badge key={i} className={TYPE_CONFIG[t]?.color || 'bg-muted'}>{TYPE_CONFIG[t]?.label || t}</Badge>)}</div></TableCell>
