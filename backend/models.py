@@ -91,6 +91,10 @@ class PartnerNoteCreate(BaseModel):
     text: str
 
 
+class PartnerPromoteRequest(BaseModel):
+    type: str  # 'seller', 'buyer', or 'co-broker'
+
+
 class VesselCreate(BaseModel):
     name: str
     imoNumber: Optional[str] = None

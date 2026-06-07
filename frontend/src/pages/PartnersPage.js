@@ -11,7 +11,7 @@ import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
-import { Plus, Search, Mail, Phone, Pencil, Trash2, Loader2, Eye, Building2, User, MessageCircle, Globe, UserPlus, Briefcase, X, FileText, Send } from 'lucide-react';
+import { Plus, Search, Mail, Phone, Pencil, Trash2, Loader2, Eye, Building2, User, MessageCircle, Globe, UserPlus, Briefcase, X, FileText, Send, ArrowUpCircle } from 'lucide-react';
 import { normalizeTR } from '../lib/utils-tr';
 import { toast } from 'sonner';
 import { Separator } from '../components/ui/separator';
@@ -130,6 +130,8 @@ export default function PartnersPage({ filterType }) {
   const [detailPartner, setDetailPartner] = useState(null);
   const [newNote, setNewNote] = useState('');
   const [savingNote, setSavingNote] = useState(false);
+  const [promotePartner, setPromotePartner] = useState(null);
+  const [promoting, setPromoting] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const fetchPartners = useCallback(async () => {
@@ -237,6 +239,22 @@ export default function PartnersPage({ filterType }) {
     catch (err) { toast.error('Failed to delete'); }
   };
 
+  const handlePromote = async (type) => {
+    if (!promotePartner) return;
+    setPromoting(true);
+    try {
+      const res = await api.post(`/api/partners/${promotePartner.id}/promote`, { type });
+      setPartners(prev => prev.map(p => (p.id === res.data.id ? res.data : p)));
+      if (detailPartner && detailPartner.id === res.data.id) setDetailPartner(res.data);
+      setPromotePartner(null);
+      toast.success(`Promoted ${res.data.companyName} to ${TYPE_CONFIG[type]?.label || type}`);
+    } catch (err) {
+      toast.error('Failed to promote');
+    } finally {
+      setPromoting(false);
+    }
+  };
+
   const handleAddNote = async () => {
     const text = newNote.trim();
     if (!detailPartner || !text) return;
@@ -322,8 +340,20 @@ export default function PartnersPage({ filterType }) {
                       <TableCell className="text-sm !text-center">{p.taxIdNo || '-'}</TableCell>
                       <TableCell className="text-sm !text-center">{p.taxOffice || '-'}</TableCell>
                       <TableCell className="!text-center">
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 justify-center">
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDetailPartner(p)} data-testid={`partner-view-${p.id}`}><Eye className="h-3.5 w-3.5" /></Button>
+                          {(p.kind || 'trading') === 'network' && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-primary"
+                              onClick={() => setPromotePartner(p)}
+                              title="Promote to Counterparty"
+                              data-testid={`partner-promote-${p.id}`}
+                            >
+                              <ArrowUpCircle className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(p)}><Pencil className="h-3.5 w-3.5" /></Button>
                           <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(p.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
                         </div>
@@ -438,6 +468,24 @@ export default function PartnersPage({ filterType }) {
 
               <div className="overflow-y-auto flex-1 pr-2" style={{ maxHeight: 'calc(85vh - 120px)' }}>
                 <div className="space-y-4 py-2">
+                  {/* Promote CTA (only for Network partners) */}
+                  {(detailPartner.kind || 'trading') === 'network' && (
+                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 flex items-center justify-between gap-3">
+                      <div className="text-sm">
+                        <div className="font-medium">In your Network</div>
+                        <div className="text-muted-foreground text-xs">Ready to do business? Promote to a counterparty.</div>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => setPromotePartner(detailPartner)}
+                        data-testid="partner-detail-promote-button"
+                      >
+                        <ArrowUpCircle className="h-4 w-4 mr-1.5" />
+                        Promote
+                      </Button>
+                    </div>
+                  )}
+
                   {/* Main Contact */}
                   {detailPartner.contactPerson && (
                     <div className="rounded-lg border p-3 space-y-2">
@@ -574,6 +622,41 @@ export default function PartnersPage({ filterType }) {
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Promote-to-Counterparty Dialog */}
+      <Dialog open={!!promotePartner} onOpenChange={(open) => { if (!open && !promoting) setPromotePartner(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Promote to Counterparty</DialogTitle>
+            <DialogDescription>
+              {promotePartner?.companyName} will move out of My Network and into the Counterparties tabs.
+              Choose the trading role:
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 gap-2 py-2">
+            {['seller', 'buyer', 'co-broker'].map((t) => (
+              <Button
+                key={t}
+                variant="outline"
+                className="justify-start h-12"
+                disabled={promoting}
+                onClick={() => handlePromote(t)}
+                data-testid={`partner-promote-confirm-${t}`}
+              >
+                {promoting ? <Loader2 className="h-4 w-4 animate-spin mr-3" /> : <Badge className={`${TYPE_CONFIG[t]?.color} mr-3`}>{TYPE_CONFIG[t]?.label}</Badge>}
+                <span className="text-sm text-muted-foreground">
+                  {t === 'seller' && 'Sells commodities'}
+                  {t === 'buyer' && 'Buys commodities'}
+                  {t === 'co-broker' && 'Brokers alongside DealSpot'}
+                </span>
+              </Button>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setPromotePartner(null)} disabled={promoting}>Cancel</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

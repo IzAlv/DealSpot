@@ -6,7 +6,7 @@ from bson import ObjectId
 
 from database import partners_col, serialize_doc, create_notification
 from auth import require_roles
-from models import PartnerCreate, PartnerNoteCreate
+from models import PartnerCreate, PartnerNoteCreate, PartnerPromoteRequest
 
 from pymongo import collation as pymongo_collation
 
@@ -81,6 +81,52 @@ def add_partner_note(partner_id: str, note: PartnerNoteCreate, user=Depends(non_
 
     updated = partners_col.find_one({"_id": ObjectId(partner_id)})
     create_notification("partner", f"Note added: {updated.get('companyName', '')}", partner_id, user.get("username"))
+    return serialize_doc(updated)
+
+
+@router.post("/{partner_id}/promote")
+def promote_partner(partner_id: str, req: PartnerPromoteRequest, user=Depends(non_accountant)):
+    """Promote a 'network' partner to a trading counterparty.
+
+    Sets kind='trading' and type=[chosen]. Idempotent — re-promoting just
+    overwrites the type. Records the change as a manual entry on the
+    notesTimeline so the lifecycle is visible in the detail view.
+    """
+    valid_types = ("seller", "buyer", "co-broker")
+    if req.type not in valid_types:
+        raise HTTPException(status_code=400, detail=f"type must be one of: {', '.join(valid_types)}")
+
+    partner = partners_col.find_one({"_id": ObjectId(partner_id)})
+    if not partner:
+        raise HTTPException(status_code=404, detail="Partner not found")
+
+    prev_kind = partner.get("kind") or "trading"
+    author = user.get("displayName") or user.get("username") or "DealSpot"
+    timeline_entry = {
+        "ts": datetime.utcnow().isoformat(),
+        "source": "manual",
+        "author": author,
+        "text": f"Promoted from {prev_kind} to trading/{req.type}",
+    }
+    partners_col.update_one(
+        {"_id": ObjectId(partner_id)},
+        {
+            "$set": {
+                "kind": "trading",
+                "type": [req.type],
+                "updatedAt": datetime.utcnow(),
+            },
+            "$push": {"notesTimeline": timeline_entry},
+        },
+    )
+
+    updated = partners_col.find_one({"_id": ObjectId(partner_id)})
+    create_notification(
+        "partner",
+        f"Promoted to {req.type}: {updated.get('companyName', '')}",
+        partner_id,
+        user.get("username"),
+    )
     return serialize_doc(updated)
 
 
