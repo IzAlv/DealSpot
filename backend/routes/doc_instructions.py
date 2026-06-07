@@ -226,8 +226,8 @@ async def send_di_email(di_id: str, req: DiSendEmailRequest = DiSendEmailRequest
     if os.path.exists(logo_path):
         with open(logo_path, "rb") as f:
             logo_b64 = base64.b64encode(f.read()).decode()
-        attachments.append({"filename": "logo.png", "content": logo_b64, "content_type": "image/png", "content_id": "pirlogo"})
-        logo_html = '<img src="cid:pirlogo" style="max-width:300px;height:auto;display:block;margin:0 auto;" />'
+        attachments.append({"filename": "logo.png", "content": logo_b64, "content_type": "image/png", "content_id": "dealspotlogo"})
+        logo_html = '<img src="cid:dealspotlogo" style="max-width:300px;height:auto;display:block;margin:0 auto;" />'
 
     # Build shipper text
     shipper_text = doc.get("shipperText", "")

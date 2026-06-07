@@ -49,7 +49,7 @@ app.include_router(auth_router)
 
 @app.get("/api/public/logo")
 async def get_public_logo():
-    logo_path = os.path.join(os.path.dirname(__file__), "static", "pir-logo.jpeg")
+    logo_path = os.path.join(os.path.dirname(__file__), "static", "dealspot-logo.jpeg")
     if os.path.exists(logo_path):
         with open(logo_path, "rb") as f:
             return Response(content=f.read(), media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})

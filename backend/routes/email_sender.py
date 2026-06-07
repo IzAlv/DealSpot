@@ -27,7 +27,7 @@ def get_cc_emails():
     users = db.users.find({"role": {"$in": ["admin"]}})
     return [u["email"] for u in users if u.get("email")]
 
-LOGO_PATH = os.path.join(os.path.dirname(__file__), "..", "pir-logo-transparent-sm.png")
+LOGO_PATH = os.path.join(os.path.dirname(__file__), "..", "dealspot-logo-transparent-sm.png")
 LOGO_B64 = ""
 if os.path.exists(LOGO_PATH):
     with open(LOGO_PATH, "rb") as f:
@@ -254,7 +254,7 @@ def build_email_body(trade, doc_name, recipient_name, recipient_role):
         logo_html = f'''
             <table style="width: 100%;" cellpadding="0" cellspacing="0"><tr>
                 <td style="text-align: center; padding: 10px 0;">
-                    <img src="cid:pirlogo" style="height: 50px; vertical-align: middle;" alt="DealSpot" />
+                    <img src="cid:dealspotlogo" style="height: 50px; vertical-align: middle;" alt="DealSpot" />
                     <span style="color: #ffffff; font-size: 22px; font-weight: bold; vertical-align: middle; margin-left: 12px;">DealSpot Ltd</span>
                 </td>
             </tr></table>'''
@@ -317,7 +317,7 @@ def build_email_body(trade, doc_name, recipient_name, recipient_role):
     <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 680px; margin: 0 auto; border: 1px solid #e0e0e0;">
         <div style="padding: 0 28px; background-color: #fafaf8;">
             <div style="text-align: center;">
-                <img src="cid:pirlogo" style="height: 180px; display: block; margin: 0 auto;" alt="DealSpot" />
+                <img src="cid:dealspotlogo" style="height: 180px; display: block; margin: 0 auto;" alt="DealSpot" />
             </div>
             <h2 style="text-align:center;color:#1B7A3D;font-size:18px;margin:0 0 16px 0;border-bottom:2px solid #1B7A3D;padding-bottom:8px;">Shipment Appropriation</h2>
             
@@ -423,7 +423,7 @@ def build_email_body(trade, doc_name, recipient_name, recipient_role):
     <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 680px; margin: 0 auto; border: 1px solid #e0e0e0;">
         <div style="padding: 0 28px; background-color: #fafaf8;">
             <div style="text-align: center;">
-                <img src="cid:pirlogo" style="height: 180px; display: block; margin: 0 auto;" alt="DealSpot" />
+                <img src="cid:dealspotlogo" style="height: 180px; display: block; margin: 0 auto;" alt="DealSpot" />
             </div>
             <p style="font-size: 15px; color: #333; margin-top: 0;">Dear {recipient_name},</p>
             {"<p style='font-size: 15px; color: #333;'>Please find below the vessel nomination details for the subject contract.</p>" if doc_name == "Vessel Nomination" else f"<p style='font-size: 15px; color: #333;'>Please find below the <strong>{doc_name}</strong> details:</p>"}
@@ -528,10 +528,10 @@ async def send_document_email(req: EmailSendRequest, user=Depends(get_current_us
     # Add inline logo attachment for CID reference in email body
     if LOGO_B64:
         attachments_list.append({
-            "filename": "pir-logo.png",
+            "filename": "dealspot-logo.png",
             "content": LOGO_B64,
             "content_type": "image/png",
-            "content_id": "pirlogo",
+            "content_id": "dealspotlogo",
         })
 
     sent_to = []

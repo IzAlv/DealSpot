@@ -31,7 +31,7 @@ DARK_TEXT = colors.HexColor("#1A1A1A")
 GREY_TEXT = colors.HexColor("#666666")
 LIGHT_GREEN = colors.HexColor("#E8F5E9")
 BORDER_COLOR = colors.HexColor("#C8E6C9")
-LOGO_PATH = os.path.join(os.path.dirname(__file__), "..", "pir-logo.jpeg")
+LOGO_PATH = os.path.join(os.path.dirname(__file__), "..", "dealspot-logo.jpeg")
 
 
 def fmt_date_dot(d):
@@ -271,7 +271,7 @@ def generate_bc_pdf(trade):
     story.append(Spacer(1, 2 * mm))
 
     # Stamp + Signature (matching Commission Invoice & Shipment Appropriation)
-    STAMP_PATH = os.path.join(os.path.dirname(__file__), "..", "pir-stamp-signature.png")
+    STAMP_PATH = os.path.join(os.path.dirname(__file__), "..", "dealspot-stamp-signature.png")
     sig_line = ParagraphStyle('SigLine', fontName='FreeSans', fontSize=8, alignment=TA_CENTER, textColor=GREY_TEXT)
     sig_name = ParagraphStyle('SigName', fontName='FreeSansBold', fontSize=7, alignment=TA_CENTER, textColor=DARK_TEXT, leading=10)
 
