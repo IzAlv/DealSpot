@@ -1,4 +1,4 @@
-# PIR Grain & Pulses - Commodity Trading Dashboard
+# DealSpot - Commodity Trading Dashboard
 
 ## Core Architecture
 - **Frontend**: React + Shadcn UI (port 3000)
@@ -69,8 +69,8 @@
 - `GET /api/invoices` - Invoice list (accounting)
 
 ## Credentials
-- Admin: salih.karagoz / salih123
-- Accountant: pir.accounts / pir123
+- Admin: izzet.alev / izzet123
+- Accountant: piraccount / piraccount123
 
 ## Prioritized Backlog
 ### P0
