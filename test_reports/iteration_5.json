@@ -81,7 +81,7 @@
   "seed_data_creation": "None - used existing data in database",
   "retest_needed": false,
   "should_main_agent_self_test": false,
-  "context_for_next_testing_agent": "Backend refactoring complete and verified. All API endpoints work identically after refactoring from monolithic server.py to modular structure (config.py, database.py, auth.py, models.py, seed.py, routes/). Frontend unchanged and fully functional. Database: pir_grain_pulses. Test credentials: salih.karagoz/salih123 (admin), pir.accounts/pir123 (accountant).",
+  "context_for_next_testing_agent": "Backend refactoring complete and verified. All API endpoints work identically after refactoring from monolithic server.py to modular structure (config.py, database.py, auth.py, models.py, seed.py, routes/). Frontend unchanged and fully functional. Database: pir_grain_pulses (legacy name). Test credentials: salih.karagoz/salih123 (admin), pir.accounts/pir123 (accountant).",
   "features_verified": {
     "login": "Working with both admin and accountant credentials",
     "dashboard": "KPI cards showing correct stats from /api/trades/stats/overview",
