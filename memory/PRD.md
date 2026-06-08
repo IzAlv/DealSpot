@@ -3,7 +3,7 @@
 ## Core Architecture
 - **Frontend**: React + Shadcn UI (port 3000)
 - **Backend**: FastAPI (port 8001, prefix /api)
-- **Database**: MongoDB (DB: pir_grain_pulses)
+- **Database**: MongoDB (DB: pir_grain_pulses — legacy name; rename to `dealspot` pending a migration window)
 - **Auth**: JWT-based authentication
 
 ## What's Been Implemented

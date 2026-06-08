@@ -20,5 +20,5 @@
 - Backend API: https://grain-logistics-hub-1.preview.emergentagent.com/api
 
 ## Database
-- DB Name: pir_grain_pulses (actual, despite .env saying test_database)
+- DB Name: pir_grain_pulses (legacy name; rename to `dealspot` pending a Mongo migration window)
 - MongoDB: mongodb://localhost:27017
