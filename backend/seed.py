@@ -28,7 +28,7 @@ def seed_data():
                 "password": pwd_context.hash("piraccount123"),
                 "role": "accountant",
                 "name": "PIR Accountant",
-                "email": "accounting@pirgrains.com",
+                "email": "izzet@baticaret.com",
                 "status": "active",
                 "createdAt": datetime.utcnow()
             }
@@ -45,6 +45,13 @@ def seed_data():
                     "email": "izzet.alev@gmail.com",
                 }}
             )
+
+        # Migrate the legacy piraccount email if it's still the original PIR value.
+        # Scoped by old email so a manually-changed email isn't clobbered.
+        users_col.update_one(
+            {"username": "piraccount", "email": "accounting@pirgrains.com"},
+            {"$set": {"email": "izzet@baticaret.com"}},
+        )
 
     # Only seed if collections are empty — respect user changes from Settings
     if commodities_col.count_documents({}) == 0:
