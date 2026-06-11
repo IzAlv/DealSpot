@@ -89,7 +89,7 @@ class TestTradesAPI:
             trade = data[0]
             assert "id" in trade
             # Check for common trade fields
-            assert any(key in trade for key in ["pirContractNumber", "contractNumber", "referenceNumber"])
+            assert any(key in trade for key in ["BAContractNumber", "contractNumber", "referenceNumber"])
     
     def test_get_single_trade(self):
         """Test GET /api/trades/{id} returns trade details"""

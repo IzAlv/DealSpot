@@ -138,7 +138,7 @@ function DetailBreakdown({ trades, filterField, codeField, label, breakdowns }) 
                   <TableBody>
                     {filtered.map(t => (
                       <TableRow key={t.id}>
-                        <TableCell className="font-medium text-xs">{t.pirContractNumber || t.referenceNumber}</TableCell>
+                        <TableCell className="font-medium text-xs">{t.BAContractNumber || t.referenceNumber}</TableCell>
                         <TableCell className="text-xs max-w-[150px]">{t.commodityName || '-'}</TableCell>
                         <TableCell className="text-xs">{t.sellerCode || t.sellerName || '-'}</TableCell>
                         <TableCell className="text-xs">{t.buyerCode || t.buyerName || '-'}</TableCell>

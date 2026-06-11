@@ -202,7 +202,7 @@ export default function VesselExecutionPage() {
     let r = list;
     if (veSearch) {
       const q = veSearch.toLowerCase();
-      r = r.filter(t => (t.pirContractNumber || '').toLowerCase().includes(q) || (t.commodityName || '').toLowerCase().includes(q) || (t.vesselName || '').toLowerCase().includes(q) || (t.sellerName || '').toLowerCase().includes(q) || (t.buyerName || '').toLowerCase().includes(q));
+      r = r.filter(t => (t.BAContractNumber || '').toLowerCase().includes(q) || (t.commodityName || '').toLowerCase().includes(q) || (t.vesselName || '').toLowerCase().includes(q) || (t.sellerName || '').toLowerCase().includes(q) || (t.buyerName || '').toLowerCase().includes(q));
     }
     if (veCommodity !== 'all') r = r.filter(t => t.commodityId === veCommodity);
     if (veSeller !== 'all') r = r.filter(t => t.sellerId === veSeller);
@@ -226,7 +226,7 @@ export default function VesselExecutionPage() {
 
 
   const getTradeLabel = (t) => {
-    const num = t.pirContractNumber || t.contractNumber || '';
+    const num = t.BAContractNumber || t.contractNumber || '';
     const qty = t.quantity ? Number(t.quantity).toLocaleString('en-US') : '';
     const origin = t.originAdjective || t.originName || '';
     const commodity = t.commodityName || '';
@@ -468,12 +468,12 @@ export default function VesselExecutionPage() {
       const d = res.data;
       setEmailSellerTo(d.sellerEmails?.[0] || '');
       setEmailBuyerTo(d.buyerEmails?.[0] || '');
-      setEmailPirEmails(d.pirEmails || []);
+      setEmailPirEmails(d.BAemails || []);
       // CC = other seller/buyer emails + all BA emails
       const sellerExtraEmails = (d.sellerEmails || []).slice(1);
       const buyerExtraEmails = (d.buyerEmails || []).slice(1);
-      setEmailSellerCc([...sellerExtraEmails, ...(d.pirEmails || [])]);
-      setEmailBuyerCc([...buyerExtraEmails, ...(d.pirEmails || [])]);
+      setEmailSellerCc([...sellerExtraEmails, ...(d.BAemails || [])]);
+      setEmailBuyerCc([...buyerExtraEmails, ...(d.BAemails || [])]);
     } catch {
       setEmailSellerTo('');
       setEmailBuyerTo('');
@@ -513,10 +513,10 @@ export default function VesselExecutionPage() {
       const brokAcct = trade?.brokerageAccount || 'seller';
       if (brokAcct === 'buyer') {
         setCiTo(d.buyerEmails?.[0] || '');
-        setCiCc([...(d.buyerEmails || []).slice(1), ...(d.pirEmails || [])]);
+        setCiCc([...(d.buyerEmails || []).slice(1), ...(d.BAemails || [])]);
       } else {
         setCiTo(d.sellerEmails?.[0] || '');
-        setCiCc([...(d.sellerEmails || []).slice(1), ...(d.pirEmails || [])]);
+        setCiCc([...(d.sellerEmails || []).slice(1), ...(d.BAemails || [])]);
       }
     } catch {
       setCiTo('');
@@ -720,7 +720,7 @@ export default function VesselExecutionPage() {
           <div className="flex-1 flex items-center justify-center gap-2 pr-16">
             <Ship className="h-5 w-5 text-[#1A5276] dark:text-blue-300 flex-shrink-0" />
             <h1 className="text-lg font-bold text-[#1A5276] dark:text-blue-300">
-              {trade.pirContractNumber || trade.contractNumber} - {trade.quantity ? `${Number(trade.quantity).toLocaleString()} Mts ` : ''}{trade.commodityName || ''} - {trade.vesselName || 'No Vessel'} ({trade.sellerCode || trade.sellerName || '-'} → {trade.buyerCode || trade.buyerName || '-'})
+              {trade.BAContractNumber || trade.contractNumber} - {trade.quantity ? `${Number(trade.quantity).toLocaleString()} Mts ` : ''}{trade.commodityName || ''} - {trade.vesselName || 'No Vessel'} ({trade.sellerCode || trade.sellerName || '-'} → {trade.buyerCode || trade.buyerName || '-'})
             </h1>
             {(() => {
               const s = trade.status;
@@ -762,7 +762,7 @@ export default function VesselExecutionPage() {
                   className={`border-b border-[#1A5276]/10 dark:border-blue-900/30 cursor-pointer transition-colors hover:bg-[#1A5276]/5 dark:hover:bg-blue-900/10 ${selectedTradeId === t.id ? 'bg-[#1A5276]/10 dark:bg-blue-900/30 border-l-4 border-l-[#1A5276]' : ''}`}
                   data-testid={`ve-contract-row-${t.id}`}
                 >
-                  <td className="px-4 py-2.5 font-medium text-center">{t.pirContractNumber || t.contractNumber || t.referenceNumber || '-'}</td>
+                  <td className="px-4 py-2.5 font-medium text-center">{t.BAContractNumber || t.contractNumber || t.referenceNumber || '-'}</td>
                   <td className="px-4 py-2.5 text-center">{renderCommodity(t)}</td>
                   <td className="px-4 py-2.5 text-center">{t.sellerCode || t.sellerName || '-'}</td>
                   <td className="px-4 py-2.5 text-center">{t.buyerCode || t.buyerName || '-'}</td>
@@ -806,7 +806,7 @@ export default function VesselExecutionPage() {
                   className="border-b border-amber-100 dark:border-amber-900/30 cursor-pointer transition-colors hover:bg-amber-50/50 dark:hover:bg-amber-900/10"
                   data-testid={`ve-pending-row-${t.id}`}
                 >
-                  <td className="px-4 py-2.5 font-medium text-center">{t.pirContractNumber || t.contractNumber || t.referenceNumber || '-'}</td>
+                  <td className="px-4 py-2.5 font-medium text-center">{t.BAContractNumber || t.contractNumber || t.referenceNumber || '-'}</td>
                   <td className="px-4 py-2.5 text-center">{renderCommodity(t)}</td>
                   <td className="px-4 py-2.5 text-center">{t.sellerCode || t.sellerName || '-'}</td>
                   <td className="px-4 py-2.5 text-center">{t.buyerCode || t.buyerName || '-'}</td>
@@ -851,7 +851,7 @@ export default function VesselExecutionPage() {
                   className={`border-b border-orange-100 dark:border-orange-900/30 cursor-pointer transition-colors hover:bg-orange-50/50 dark:hover:bg-orange-900/10 ${selectedTradeId === t.id ? 'bg-orange-100 dark:bg-orange-900/30 border-l-4 border-l-orange-600' : ''}`}
                   data-testid={`ve-brokerage-row-${t.id}`}
                 >
-                  <td className="px-4 py-2.5 font-medium text-center">{t.pirContractNumber || t.contractNumber || t.referenceNumber || '-'}</td>
+                  <td className="px-4 py-2.5 font-medium text-center">{t.BAContractNumber || t.contractNumber || t.referenceNumber || '-'}</td>
                   <td className="px-4 py-2.5 text-center">{renderCommodity(t)}</td>
                   <td className="px-4 py-2.5 text-center">{t.sellerCode || t.sellerName || '-'}</td>
                   <td className="px-4 py-2.5 text-center">{t.buyerCode || t.buyerName || '-'}</td>
@@ -895,7 +895,7 @@ export default function VesselExecutionPage() {
                   className={`border-b cursor-pointer transition-colors hover:bg-muted/30 text-muted-foreground ${selectedTradeId === t.id ? 'bg-muted/50 border-l-4 border-l-muted-foreground' : ''}`}
                   data-testid={`ve-contract-row-${t.id}`}
                 >
-                  <td className="px-4 py-2.5 font-medium text-center">{t.pirContractNumber || t.contractNumber || t.referenceNumber || '-'}</td>
+                  <td className="px-4 py-2.5 font-medium text-center">{t.BAContractNumber || t.contractNumber || t.referenceNumber || '-'}</td>
                   <td className="px-4 py-2.5 text-center">{renderCommodity(t)}</td>
                   <td className="px-4 py-2.5 text-center">{t.sellerCode || t.sellerName || '-'}</td>
                   <td className="px-4 py-2.5 text-center">{t.buyerCode || t.buyerName || '-'}</td>

@@ -413,7 +413,7 @@ export default function TradeDetailPage() {
         <Button variant="ghost" size="icon" onClick={() => navigate('/trades')}><ArrowLeft className="h-5 w-5" /></Button>
         <div className="flex-1">
           <h1 className="text-center text-lg font-bold text-green-700 dark:text-green-400">
-            {trade.pirContractNumber || trade.referenceNumber || trade.contractNumber} - {trade.quantity ? `${Number(trade.quantity).toLocaleString()} Mts ` : ''}{trade.commodityName || ''} - {trade.vesselName ? `${trade.vesselName} ` : ''}({(trade.sellerName || '').split(' ').slice(0, 2).join(' ')} → {(trade.buyerName || '').split(' ').slice(0, 2).join(' ')})
+            {trade.BAContractNumber || trade.referenceNumber || trade.contractNumber} - {trade.quantity ? `${Number(trade.quantity).toLocaleString()} Mts ` : ''}{trade.commodityName || ''} - {trade.vesselName ? `${trade.vesselName} ` : ''}({(trade.sellerName || '').split(' ').slice(0, 2).join(' ')} → {(trade.buyerName || '').split(' ').slice(0, 2).join(' ')})
           </h1>
         </div>
         {activeTab !== 'documents' && (
@@ -435,7 +435,7 @@ export default function TradeDetailPage() {
               <CardContent className="space-y-4 text-sm">
                 <div className="flex justify-between"><span className="text-muted-foreground">DealSpot Ref. No</span><span className="font-medium">{trade.referenceNumber || '-'}</span></div>
                 <Separator />
-                <div className="flex justify-between"><span className="text-muted-foreground">Seller Sales Contract No.</span><span className="font-medium">{trade.sellerContractNumber || trade.pirContractNumber || trade.contractNumber || '-'}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Seller Sales Contract No.</span><span className="font-medium">{trade.sellerContractNumber || trade.BAContractNumber || trade.contractNumber || '-'}</span></div>
                 <Separator />
                 <div className="flex justify-between"><span className="text-muted-foreground">Contract Date</span><span className="font-medium">{(() => { const d = trade.contractDate; if (!d) return '-'; if (/^\d{2}\/\d{2}\/\d{4}$/.test(d)) return d; try { const m = d.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return `${m[3]}/${m[2]}/${m[1]}`; return d; } catch { return d; } })()}</span></div>
                 <Separator />

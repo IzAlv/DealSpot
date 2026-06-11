@@ -105,7 +105,7 @@ def generate_bc_pdf(trade):
     broker = partners_col.find_one({"_id": ObjectId(trade["brokerId"])}) if trade.get("brokerId") else None
 
     contract_date = fmt_date_slash(trade.get("contractDate"))
-    contract_no = trade.get("sellerContractNumber") or trade.get("pirContractNumber") or trade.get("contractNumber") or trade.get("referenceNumber") or "-"
+    contract_no = trade.get("sellerContractNumber") or trade.get("BAContractNumber") or trade.get("contractNumber") or trade.get("referenceNumber") or "-"
     commodity = trade.get("commodityName") or "-"
     origin = trade.get("originName") or "-"
     quantity = trade.get("quantity") or 0
@@ -313,7 +313,7 @@ def generate_business_confirmation_pdf(trade_id: str, user=Depends(get_current_u
         raise HTTPException(status_code=404, detail="Trade not found")
 
     buf = generate_bc_pdf(trade)
-    contract_no = trade.get("sellerContractNumber") or trade.get("pirContractNumber") or trade.get("contractNumber") or trade.get("referenceNumber") or "-"
+    contract_no = trade.get("sellerContractNumber") or trade.get("BAContractNumber") or trade.get("contractNumber") or trade.get("referenceNumber") or "-"
     filename = f"Business_Confirmation_{contract_no}.pdf"
     return StreamingResponse(
         buf,

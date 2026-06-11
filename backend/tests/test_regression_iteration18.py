@@ -82,7 +82,7 @@ class TestPendingCommissionsBugFix:
         assert len(trades) == 14, f"Expected 14 trades, got {len(trades)}"
         
         # Find BEK446
-        bek446 = next((t for t in trades if 'BEK446' in (t.get('referenceNumber', '') or t.get('pirContractNumber', ''))), None)
+        bek446 = next((t for t in trades if 'BEK446' in (t.get('referenceNumber', '') or t.get('BAContractNumber', ''))), None)
         assert bek446 is not None, "BEK446 trade not found"
         return trades
     
@@ -92,7 +92,7 @@ class TestPendingCommissionsBugFix:
         assert response.status_code == 200
         trades = response.json()
         
-        bek446 = next((t for t in trades if 'BEK446' in (t.get('referenceNumber', '') or t.get('pirContractNumber', ''))), None)
+        bek446 = next((t for t in trades if 'BEK446' in (t.get('referenceNumber', '') or t.get('BAContractNumber', ''))), None)
         assert bek446 is not None, "BEK446 not found"
         
         # Verify the fields that determine pending commission status
@@ -116,7 +116,7 @@ class TestPendingCommissionsBugFix:
         ]
         
         assert len(pending_commissions) == 1, f"Expected 1 pending commission (BEK446), got {len(pending_commissions)}"
-        assert 'BEK446' in (pending_commissions[0].get('referenceNumber', '') or pending_commissions[0].get('pirContractNumber', '')), \
+        assert 'BEK446' in (pending_commissions[0].get('referenceNumber', '') or pending_commissions[0].get('BAContractNumber', '')), \
             "The only pending commission should be BEK446"
     
     def test_trades_with_brokerage_status_have_paid_invoices(self, admin_headers):
@@ -129,7 +129,7 @@ class TestPendingCommissionsBugFix:
         brokerage_trades = [t for t in trades if t.get('status') == 'brokerage']
         
         for t in brokerage_trades:
-            ref = t.get('referenceNumber', '') or t.get('pirContractNumber', '')
+            ref = t.get('referenceNumber', '') or t.get('BAContractNumber', '')
             # These should have invoicePaid=True (already paid)
             assert t.get('invoicePaid') == True, f"Trade {ref} with status='brokerage' should have invoicePaid=True"
 
@@ -163,7 +163,7 @@ class TestTradesAPI:
         # Get BEK446 trade
         response = requests.get(f"{BASE_URL}/api/trades", headers=admin_headers)
         trades = response.json()
-        bek446 = next((t for t in trades if 'BEK446' in (t.get('referenceNumber', '') or t.get('pirContractNumber', ''))), None)
+        bek446 = next((t for t in trades if 'BEK446' in (t.get('referenceNumber', '') or t.get('BAContractNumber', ''))), None)
         
         if bek446:
             # Try to update status (should work)
@@ -188,7 +188,7 @@ class TestGlobalSearch:
         # Verify trades have searchable fields
         if trades:
             trade = trades[0]
-            assert 'pirContractNumber' in trade or 'contractNumber' in trade
+            assert 'BAContractNumber' in trade or 'contractNumber' in trade
             assert 'commodityName' in trade
             assert 'sellerName' in trade
             assert 'buyerName' in trade
@@ -380,7 +380,7 @@ class TestYearFilterLogic:
             
             # If completed with unpaid brokerage and has broker, should be included
             if status == 'completed' and not invoice_paid and has_broker:
-                ref = t.get('referenceNumber', '') or t.get('pirContractNumber', '')
+                ref = t.get('referenceNumber', '') or t.get('BAContractNumber', '')
                 print(f"Trade {ref} should appear in year filter (completed, unpaid brokerage)")
 
 

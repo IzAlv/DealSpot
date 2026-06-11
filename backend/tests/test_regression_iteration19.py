@@ -112,7 +112,7 @@ class TestTrades:
         assert response.status_code == 200
         data = response.json()
         assert "id" in data
-        assert "referenceNumber" in data or "pirContractNumber" in data
+        assert "referenceNumber" in data or "BAContractNumber" in data
         print(f"✓ GET /api/trades/{trade_id} returned trade details")
     
     def test_trades_have_required_fields(self, auth_headers):
@@ -269,7 +269,7 @@ class TestEmailSending:
         data = response.json()
         assert "sellerEmails" in data
         assert "buyerEmails" in data
-        assert "pirEmails" in data
+        assert "BAemails" in data
         print(f"✓ Email prefill endpoint works")
     
     def test_send_document_email_validation(self, auth_headers):

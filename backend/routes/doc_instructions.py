@@ -181,7 +181,7 @@ async def send_di_email(di_id: str, req: DiSendEmailRequest = DiSendEmailRequest
 
     seller_email = to_emails[0]
     cc_emails = req.ccEmails if req.ccEmails else []
-    contract_num = trade.get("pirContractNumber", "N/A")
+    contract_num = trade.get("BAContractNumber", "N/A")
 
     # Build consignee/notify text
     consignee_text = "TO ORDER"

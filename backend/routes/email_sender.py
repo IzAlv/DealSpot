@@ -24,7 +24,7 @@ SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "DealSpot - Execution <noreply@bat
 def get_cc_emails():
     """Load CC emails from admin users in the database."""
     from database import db
-    users = db.users.find({"role": {"$in": ["admin"]}})
+    users = db.users.find({"role": {"$in": ["admin", "accountant"]}})
     return [u["email"] for u in users if u.get("email")]
 
 LOGO_PATH = os.path.join(os.path.dirname(__file__), "..", "dealspot-logo-transparent-sm.png")
@@ -448,11 +448,11 @@ def get_email_prefill(trade_id: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Trade not found")
     seller_emails = get_partner_all_emails(trade.get("sellerId"))
     buyer_emails = get_partner_all_emails(trade.get("buyerId"))
-    pir_emails = get_cc_emails()
+    ba_emails = get_cc_emails()
     return {
         "sellerEmails": seller_emails,
         "buyerEmails": buyer_emails,
-        "pirEmails": pir_emails,
+        "BAemails": ba_emails,
         "sellerName": trade.get("sellerCode") or trade.get("sellerName") or "",
         "buyerName": trade.get("buyerCode") or trade.get("buyerName") or "",
     }

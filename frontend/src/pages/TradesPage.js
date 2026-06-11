@@ -452,7 +452,7 @@ export default function TradesPage() {
                 <TableCell className="text-center text-sm">{formatDate(trade.contractDate || trade.createdAt)}</TableCell>
                 <TableCell className="text-center">
                   <Link to={`/trades/${trade.id}`} className="font-medium text-foreground hover:underline cursor-pointer text-sm">
-                    {trade.pirContractNumber || trade.contractNumber || trade.referenceNumber}
+                    {trade.BAContractNumber || trade.contractNumber || trade.referenceNumber}
                   </Link>
                   {trade.sellerContractNumber && trade.sellerContractNumber !== 'N/A' && (
                     <div className="text-xs text-muted-foreground">{trade.sellerContractNumber}</div>
@@ -747,7 +747,7 @@ export default function TradesPage() {
         <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto [&>button.absolute]:hidden">
           <DialogHeader>
             <div className="flex items-center justify-center gap-3">
-              <DialogTitle className="text-2xl">{selectedTrade?.pirContractNumber || selectedTrade?.referenceNumber || 'Trade Details'}</DialogTitle>
+              <DialogTitle className="text-2xl">{selectedTrade?.BAContractNumber || selectedTrade?.referenceNumber || 'Trade Details'}</DialogTitle>
               {selectedTrade && <Badge className={TRADE_STATUS_CONFIG[selectedTrade.status]?.color || ''}>{TRADE_STATUS_CONFIG[selectedTrade.status]?.label}</Badge>}
             </div>
           </DialogHeader>
@@ -760,7 +760,7 @@ export default function TradesPage() {
                   <div className="space-y-5 text-base">
                     <div className="flex justify-between"><span className="text-muted-foreground">DealSpot Ref. No</span><span className="font-medium">{selectedTrade.referenceNumber || '-'}</span></div>
                     <hr />
-                    <div className="flex justify-between"><span className="text-muted-foreground">Seller Sales Contract No.</span><span className="font-medium">{selectedTrade.sellerContractNumber || selectedTrade.pirContractNumber || selectedTrade.contractNumber || '-'}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Seller Sales Contract No.</span><span className="font-medium">{selectedTrade.sellerContractNumber || selectedTrade.BAContractNumber || selectedTrade.contractNumber || '-'}</span></div>
                     <hr />
                     <div className="flex justify-between"><span className="text-muted-foreground">Contract Date</span><span className="font-medium">{formatDate(selectedTrade.contractDate)}</span></div>
                     <hr />
@@ -847,7 +847,7 @@ export default function TradesPage() {
                       return (
                         <TableRow key={t.id} className="cursor-pointer hover:bg-muted/50" onClick={() => { setEntityFilter(null); navigate(`/trades/${t.id}`); }}>
                           <TableCell><Badge className={`text-xs ${sc.color || 'bg-muted'}`}>{sc.label || t.status}</Badge></TableCell>
-                          <TableCell className="font-medium text-sm">{t.pirContractNumber || t.referenceNumber}</TableCell>
+                          <TableCell className="font-medium text-sm">{t.BAContractNumber || t.referenceNumber}</TableCell>
                           <TableCell className="text-sm max-w-[150px]">{t.commodityName || '-'}</TableCell>
                           <TableCell className="text-sm">{t.sellerCode || t.sellerName || '-'}</TableCell>
                           <TableCell className="text-sm">{t.buyerCode || t.buyerName || '-'}</TableCell>

@@ -179,7 +179,7 @@ export default function DocInstructionsPage({ filterTradeId, embedded } = {}) {
       const sellerEmails = d.sellerEmails || [];
       setDiEmailTo(sellerEmails.join(', '));
       // CC: only BA emails
-      setDiEmailCc([...(d.pirEmails || [])]);
+      setDiEmailCc([...(d.BAemails || [])]);
     } catch {
       setDiEmailTo('');
       setDiEmailCc([]);
@@ -266,7 +266,7 @@ export default function DocInstructionsPage({ filterTradeId, embedded } = {}) {
   };
 
   const getTradeDropdownLabel = (trade) => {
-    const num = trade.pirContractNumber || trade.contractNumber || '';
+    const num = trade.BAContractNumber || trade.contractNumber || '';
     const qty = trade.quantity ? Number(trade.quantity).toLocaleString('en-US') : '';
     const origin = trade.originAdjective || trade.originName || '';
     const commodity = trade.commodityName || '';
@@ -282,7 +282,7 @@ export default function DocInstructionsPage({ filterTradeId, embedded } = {}) {
 
   const getTradeLabel = (tradeId) => {
     const trade = trades.find(t => t.id === tradeId);
-    return trade ? (trade.pirContractNumber || trade.contractNumber || tradeId) : tradeId;
+    return trade ? (trade.BAContractNumber || trade.contractNumber || tradeId) : tradeId;
   };
 
   const getBuyerName = (buyerId) => {
@@ -585,7 +585,7 @@ export default function DocInstructionsPage({ filterTradeId, embedded } = {}) {
             <DialogTitle className="text-[#1A5276] text-center">{(() => {
               const trade = trades.find(t => t.id === form.tradeId);
               if (trade) {
-                const num = trade.pirContractNumber || trade.contractNumber || '';
+                const num = trade.BAContractNumber || trade.contractNumber || '';
                 const qty = trade.quantity ? Number(trade.quantity).toLocaleString('en-US') : '';
                 const origin = trade.originAdjective || trade.originName || '';
                 const commodity = trade.commodityName || '';
@@ -605,7 +605,7 @@ export default function DocInstructionsPage({ filterTradeId, embedded } = {}) {
               <Select value={form.tradeId} onValueChange={handleTradeSelect} disabled={!!editingId}>
                 <SelectTrigger data-testid="di-contract-select"><SelectValue placeholder="Select contract" /></SelectTrigger>
                 <SelectContent>
-                  {trades.filter(t => t.pirContractNumber || t.contractNumber).map(t => (
+                  {trades.filter(t => t.BAContractNumber || t.contractNumber).map(t => (
                     <SelectItem key={t.id} value={t.id}>{getTradeDropdownLabel(t)}</SelectItem>
                   ))}
                 </SelectContent>

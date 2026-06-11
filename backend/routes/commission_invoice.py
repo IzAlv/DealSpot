@@ -102,7 +102,7 @@ def generate_invoice_pdf(trade, invoice_number, invoice_date, issued_to_name, is
     # =====================================================
     # TRADE DETAILS: Compact 2-column key-value grid
     # =====================================================
-    contract_num = trade.get("sellerContractNumber") or trade.get("pirContractNumber") or trade.get("referenceNumber") or "-"
+    contract_num = trade.get("sellerContractNumber") or trade.get("BAContractNumber") or trade.get("referenceNumber") or "-"
     vessel_name = trade.get("vesselName") or "-"
     bl_qty = trade.get("blQuantity") or trade.get("quantity") or 0
     loading_port = trade.get("loadingPortName") or trade.get("basePortName") or "-"
@@ -419,7 +419,7 @@ def generate_invoice_pdf(trade, invoice_number, invoice_date, issued_to_name, is
 def generate_ci_pdf(trade):
     """Generate Commission Invoice PDF and return BytesIO buffer."""
     trade_id = str(trade["_id"])
-    contract_num = trade.get("sellerContractNumber") or trade.get("pirContractNumber") or trade.get("referenceNumber") or trade_id
+    contract_num = trade.get("sellerContractNumber") or trade.get("BAContractNumber") or trade.get("referenceNumber") or trade_id
     brokerage_account = trade.get("brokerageAccount") or "seller"
 
     if brokerage_account == "buyer":
@@ -468,7 +468,7 @@ def get_commission_invoice_pdf(trade_id: str, account: str = "seller", bankIds: 
     if not trade:
         raise HTTPException(status_code=404, detail="Trade not found")
 
-    contract_num = trade.get("sellerContractNumber") or trade.get("pirContractNumber") or trade.get("referenceNumber") or trade_id
+    contract_num = trade.get("sellerContractNumber") or trade.get("BAContractNumber") or trade.get("referenceNumber") or trade_id
     brokerage_account = account or trade.get("brokerageAccount") or "seller"
 
     if brokerage_account == "buyer":
@@ -554,7 +554,7 @@ async def send_commission_invoice_email(req: SendCommissionInvoiceRequest, user=
     pdf_buffer = generate_ci_pdf(trade)
     pdf_bytes = pdf_buffer.read()
 
-    contract_num = trade.get("sellerContractNumber") or trade.get("pirContractNumber") or trade.get("referenceNumber") or req.tradeId
+    contract_num = trade.get("sellerContractNumber") or trade.get("BAContractNumber") or trade.get("referenceNumber") or req.tradeId
     brokerage_account = trade.get("brokerageAccount") or "seller"
 
     # Get recipient name

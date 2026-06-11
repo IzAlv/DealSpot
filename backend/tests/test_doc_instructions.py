@@ -81,7 +81,7 @@ class TestTradesAPI:
         
         if trades_with_seller_surveyor:
             trade = trades_with_seller_surveyor[0]
-            print(f"Trade {trade.get('pirContractNumber', trade.get('id'))} has sellerSurveyor: {trade['sellerSurveyor']}")
+            print(f"Trade {trade.get('BAContractNumber', trade.get('id'))} has sellerSurveyor: {trade['sellerSurveyor']}")
             assert isinstance(trade['sellerSurveyor'], str)
 
 

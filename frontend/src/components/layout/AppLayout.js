@@ -71,7 +71,7 @@ export default function AppLayout() {
       const lq = normalizeTurkish(q);
       const matchField = (val) => normalizeTurkish(val).includes(lq);
       const trades = (tradesRes.data || []).filter(t =>
-        matchField(t.pirContractNumber) || matchField(t.contractNumber) ||
+        matchField(t.BAContractNumber) || matchField(t.contractNumber) ||
         matchField(t.commodityName) || matchField(t.sellerName) ||
         matchField(t.buyerName) || matchField(t.vesselName)
       ).slice(0, 10);
@@ -203,7 +203,7 @@ export default function AppLayout() {
                             <div key={t.id} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/50 cursor-pointer" onClick={() => { navigate(`/trades/${t.id}/edit`); setShowResults(false); }}>
                               <FileText className="h-4 w-4 text-primary shrink-0" />
                               <div className="flex-1 min-w-0 grid grid-cols-[120px_1fr_100px] gap-2 items-center">
-                                <div className="text-sm font-semibold">{t.pirContractNumber || t.contractNumber}</div>
+                                <div className="text-sm font-semibold">{t.BAContractNumber || t.contractNumber}</div>
                                 <div className="text-xs text-muted-foreground">{t.commodityName} · {t.sellerName} → {t.buyerName}{t.vesselName ? ` · ${t.vesselName}` : ''}</div>
                                 <div className="text-xs text-right"><Badge variant="outline" className="text-[10px] px-1.5">{t.status || 'ongoing'}</Badge></div>
                               </div>

@@ -12,7 +12,7 @@ OUTPUT = "/Users/izzet/Desktop/broker_app_template.xlsx"
 SHEETS = {
     "trades": {
         "columns": [
-            "id", "pirContractNumber", "referenceNumber", "contractNumber", "sellerContractNumber",
+            "id", "BAContractNumber", "referenceNumber", "contractNumber", "sellerContractNumber",
             "status", "contractDate", "cropYear",
             "sellerName", "sellerCode", "buyerName", "buyerCode",
             "brokerName", "brokerCode", "coBrokerName", "coBrokerCode",
@@ -27,7 +27,7 @@ SHEETS = {
             "createdAt", "updatedAt",
         ],
         "sample": {
-            "id": "abc123", "pirContractNumber": "PIR-25-AB1234", "referenceNumber": "PIR-25-AB1234",
+            "id": "abc123", "BAContractNumber": "PIR-25-AB1234", "referenceNumber": "PIR-25-AB1234",
             "contractNumber": "PIR-25-AB1234", "sellerContractNumber": "N/A",
             "status": "confirmation", "contractDate": "01/05/2025", "cropYear": "2025",
             "sellerName": "Acme Grain Ltd", "sellerCode": "ACM",

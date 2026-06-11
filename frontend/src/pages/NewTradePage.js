@@ -126,7 +126,7 @@ export default function NewTradePage() {
     specialConditions: '', notes: '', status: 'confirmation', commoditySpecs: '',
     thirdPartyLab: 'allowed',
     dischargeRate: '1500', demurrageRate: '',
-    pirContractNumber: '', sellerContractNumber: 'N/A',
+    BAContractNumber: '', sellerContractNumber: 'N/A',
     gaftaTerm: 'GAFTA No. 48, Arbitration Clause 125, London',
     gaftaExtension: 'allowed',
     excludedDisports: [], excludedSurveyors: [],
@@ -209,7 +209,7 @@ export default function NewTradePage() {
             notes: t.notes || '',
             status: t.status || 'confirmation',
             commoditySpecs: t.commoditySpecs || (() => { const comm = co.data.find(c => c.id === t.commodityId); return comm?.specs || ''; })(),
-            pirContractNumber: t.pirContractNumber || '',
+            BAContractNumber: t.BAContractNumber || '',
             sellerContractNumber: t.sellerContractNumber || 'N/A',
             gaftaTerm: t.gaftaTerm || 'GAFTA No. 48, Arbitration Clause 125, London',
             gaftaExtension: t.gaftaExtension || 'allowed',
@@ -296,7 +296,7 @@ export default function NewTradePage() {
     try {
       const data = {
         ...form,
-        contractNumber: form.pirContractNumber || '',
+        contractNumber: form.BAContractNumber || '',
         sellerContractNumber: form.sellerContractNumber || 'N/A',
         brokerId: form.brokerId === 'na' ? '' : form.brokerId,
         coBrokerId: form.coBrokerId === 'na' ? '' : form.coBrokerId,
@@ -348,7 +348,7 @@ export default function NewTradePage() {
           </div>
           <div className="space-y-2">
             <Label>DealSpot Ref. No</Label>
-            <Input value={form.pirContractNumber} onChange={(e) => set('pirContractNumber', e.target.value)} placeholder="Auto-generated if empty" />
+            <Input value={form.BAContractNumber} onChange={(e) => set('BAContractNumber', e.target.value)} placeholder="Auto-generated if empty" />
           </div>
           <div className="space-y-2">
             <Label>Seller Contract Number</Label>
@@ -723,7 +723,7 @@ export default function NewTradePage() {
             let tid = tradeId;
             if (!tid) {
               // Save first for new contracts
-              const data = { ...form, contractNumber: form.pirContractNumber || '', portVariations: form.portVariations || [] };
+              const data = { ...form, contractNumber: form.BAContractNumber || '', portVariations: form.portVariations || [] };
               const res = await api.post('/api/trades', data);
               tid = res.data.id;
               toast.success('Contract saved');

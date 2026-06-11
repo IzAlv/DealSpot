@@ -68,7 +68,7 @@ class TestLoadingPort:
         trades = trades_response.json()
         
         # Find MW2611
-        mw2611 = next((t for t in trades if t.get('pirContractNumber') == 'MW2611'), None)
+        mw2611 = next((t for t in trades if t.get('BAContractNumber') == 'MW2611'), None)
         assert mw2611 is not None, "Trade MW2611 not found"
         
         # Verify loading port fields
@@ -112,7 +112,7 @@ class TestLoadingPort:
             "basePortId": marmara['id'],  # Discharge port
             "loadingPortId": chornomorsk['id'],  # Loading port - SEPARATE from base port
             "status": "confirmation",
-            "pirContractNumber": "TEST_LOADING_PORT_001"
+            "BAContractNumber": "TEST_LOADING_PORT_001"
         }
         
         create_response = self.session.post(f"{BASE_URL}/api/trades", json=trade_data)
@@ -174,7 +174,7 @@ class TestLoadingPort:
             "basePortId": marmara['id'],
             "loadingPortId": chornomorsk['id'],
             "status": "confirmation",
-            "pirContractNumber": "TEST_UPDATE_LOADING_PORT_001"
+            "BAContractNumber": "TEST_UPDATE_LOADING_PORT_001"
         }
         
         create_response = self.session.post(f"{BASE_URL}/api/trades", json=trade_data)
@@ -213,7 +213,7 @@ class TestLoadingPort:
         assert trades_response.status_code == 200
         trades = trades_response.json()
         
-        mw2611 = next((t for t in trades if t.get('pirContractNumber') == 'MW2611'), None)
+        mw2611 = next((t for t in trades if t.get('BAContractNumber') == 'MW2611'), None)
         assert mw2611 is not None, "Trade MW2611 not found"
         
         trade_id = mw2611.get('id')
@@ -224,7 +224,7 @@ class TestLoadingPort:
         assert pdf_response.headers.get('content-type') == 'application/pdf', "Response should be PDF"
         
         # PDF content is binary, we can't easily parse it, but we verified the endpoint works
-        print(f"Business Confirmation PDF generated successfully for trade {mw2611.get('pirContractNumber')}")
+        print(f"Business Confirmation PDF generated successfully for trade {mw2611.get('BAContractNumber')}")
         print(f"PDF size: {len(pdf_response.content)} bytes")
         
         # Verify the trade has the country data that should appear in PDF

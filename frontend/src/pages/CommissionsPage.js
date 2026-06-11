@@ -166,7 +166,7 @@ export default function CommissionsPage() {
   };
 
   const openInvoiceEdit = (t) => {
-    const autoNo = `COMM-${t.pirContractNumber || t.referenceNumber || ''}`;
+    const autoNo = `COMM-${t.BAContractNumber || t.referenceNumber || ''}`;
     const autoDate = t.buyerPaymentDate || '';
     setInvoiceEditForm({
       invoiceNo: t.invoiceNo || autoNo,
@@ -260,7 +260,7 @@ export default function CommissionsPage() {
             {filtered.map((t, idx) => {
               const invoiceStatus = t.invoicePaid ? 'PAID' : 'PENDING';
               const invDate = t.invoiceDate || t.buyerPaymentDate || t.cancelledDate || '-';
-              const invNo = t.invoiceNo || `COMM-${t.pirContractNumber || t.referenceNumber || ''}`;
+              const invNo = t.invoiceNo || `COMM-${t.BAContractNumber || t.referenceNumber || ''}`;
               const commCur = getCommCurrency(t);
               return (
               <TableRow key={t.id} className={idx % 2 === 1 ? 'bg-muted/30' : ''}>
@@ -273,7 +273,7 @@ export default function CommissionsPage() {
                 </TableCell>
                 <TableCell className="text-sm whitespace-nowrap">{invDate}</TableCell>
                 <TableCell className="text-sm max-w-[120px]"><div className="break-all">{invNo}</div></TableCell>
-                <TableCell className="font-medium text-primary"><Link to={`/trades/${t.id}`}>{(() => { const cn = t.pirContractNumber || t.referenceNumber || ''; return cn.length > 10 ? <>{cn.substring(0, cn.lastIndexOf(' ') > 0 ? cn.lastIndexOf(' ') : Math.ceil(cn.length/2))}<br/>{cn.substring(cn.lastIndexOf(' ') > 0 ? cn.lastIndexOf(' ') + 1 : Math.ceil(cn.length/2))}</> : cn; })()}</Link></TableCell>
+                <TableCell className="font-medium text-primary"><Link to={`/trades/${t.id}`}>{(() => { const cn = t.BAContractNumber || t.referenceNumber || ''; return cn.length > 10 ? <>{cn.substring(0, cn.lastIndexOf(' ') > 0 ? cn.lastIndexOf(' ') : Math.ceil(cn.length/2))}<br/>{cn.substring(cn.lastIndexOf(' ') > 0 ? cn.lastIndexOf(' ') + 1 : Math.ceil(cn.length/2))}</> : cn; })()}</Link></TableCell>
                 <TableCell className="text-sm max-w-[160px]">
                   <div>{t.commodityName||'-'}</div>
                 </TableCell>
@@ -467,7 +467,7 @@ export default function CommissionsPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Pencil className="h-4 w-4" />Edit Brokerage</DialogTitle>
           </DialogHeader>
-          {editDialog.trade && <p className="text-sm text-muted-foreground">{editDialog.trade.pirContractNumber || editDialog.trade.referenceNumber}</p>}
+          {editDialog.trade && <p className="text-sm text-muted-foreground">{editDialog.trade.BAContractNumber || editDialog.trade.referenceNumber}</p>}
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Rate per MT</Label>
@@ -497,7 +497,7 @@ export default function CommissionsPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Pencil className="h-4 w-4" />Edit Invoice</DialogTitle>
           </DialogHeader>
-          {invoiceEditDialog.trade && <p className="text-sm text-muted-foreground">{invoiceEditDialog.trade.pirContractNumber || invoiceEditDialog.trade.referenceNumber}</p>}
+          {invoiceEditDialog.trade && <p className="text-sm text-muted-foreground">{invoiceEditDialog.trade.BAContractNumber || invoiceEditDialog.trade.referenceNumber}</p>}
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Invoice No</Label>

@@ -35,7 +35,7 @@ export default function LoginPage() {
           <CardTitle className="text-2xl" style={{ color: BA_NAVY }} data-testid="login-title">
             DealSpot
           </CardTitle>
-          <CardDescription style={{ color: BA_GRAY }}>Agricultural Commodity Trading Dashboard</CardDescription>
+          <CardDescription style={{ color: BA_GRAY }}>DealSpot Dashboard</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
