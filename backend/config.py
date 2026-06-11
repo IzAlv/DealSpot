@@ -1,7 +1,7 @@
 import os
 
 MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
-DB_NAME = os.environ.get("DB_NAME", "pir_grain_pulses")
+DB_NAME = os.environ.get("DB_NAME", "dealspot")
 SECRET_KEY = os.environ.get("SECRET_KEY", "pir-grain-pulses-secret-key-2024")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 168
