@@ -616,6 +616,9 @@ export default function TradesPage() {
       <Card>
         <CardContent className="pt-6">
           <div className="flex items-center gap-3 overflow-x-auto">
+            <div className="shrink-0">
+              <Button onClick={() => navigate('/trades/new')} data-testid="trades-new-trade-button"><Plus className="mr-2 h-4 w-4" />New Contract</Button>
+            </div>
             <div className="relative shrink-0">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input data-testid="trades-search-input" placeholder="Search contracts..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 w-[200px]" />
@@ -679,9 +682,6 @@ export default function TradesPage() {
                 {uniqueCoBrokers.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}
               </SelectContent>
             </Select>
-            <div className="ml-auto shrink-0">
-              <Button onClick={() => navigate('/trades/new')} data-testid="trades-new-trade-button"><Plus className="mr-2 h-4 w-4" />New Contract</Button>
-            </div>
           </div>
         </CardContent>
       </Card>
