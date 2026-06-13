@@ -10,6 +10,13 @@ from auth import pwd_context
 
 
 def seed_data():
+    try:
+        _run_seed()
+    except Exception as e:
+        print(f"WARNING: seed_data: MongoDB unreachable at startup, skipping ({e})", flush=True)
+
+
+def _run_seed():
     ensure_indexes()
     partners_col.update_many({"kind": {"$exists": False}}, {"$set": {"kind": "trading"}})
     if users_col.count_documents({}) == 0:

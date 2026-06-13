@@ -1,6 +1,11 @@
 import os
 
-MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
+MONGO_URL = (
+    os.environ.get("MONGO_URL")
+    or os.environ.get("MONGODB_URL")
+    or os.environ.get("MONGODB_PRIVATE_URL")
+    or "mongodb://localhost:27017"
+)
 DB_NAME = os.environ.get("DB_NAME", "dealspot")
 SECRET_KEY = os.environ.get("SECRET_KEY", "pir-grain-pulses-secret-key-2024")
 ALGORITHM = "HS256"
