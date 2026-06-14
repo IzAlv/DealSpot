@@ -1,8 +1,6 @@
-from datetime import datetime
 from fastapi import APIRouter, Depends
-from bson import ObjectId
 
-from database import bank_accounts_col, serialize_doc
+from database import q_all, insert_document, update_document, delete_document, serialize_doc_row
 from auth import require_roles
 
 non_accountant = require_roles("admin", "user")
@@ -13,27 +11,20 @@ router = APIRouter(prefix="/api/bank-accounts", tags=["bank-accounts"])
 
 @router.get("")
 def list_bank_accounts(user=Depends(any_role)):
-    return [serialize_doc(b) for b in bank_accounts_col.find().sort("createdAt", -1)]
+    return [serialize_doc_row(b) for b in q_all("SELECT * FROM bank_accounts ORDER BY created_at DESC")]
 
 
 @router.post("")
 def create_bank_account(data: dict, user=Depends(non_accountant)):
-    data["createdAt"] = datetime.utcnow()
-    result = bank_accounts_col.insert_one(data)
-    data["_id"] = result.inserted_id
-    return serialize_doc(data)
+    return serialize_doc_row(insert_document("bank_accounts", data))
 
 
 @router.put("/{account_id}")
 def update_bank_account(account_id: str, data: dict, user=Depends(non_accountant)):
-    data.pop("id", None)
-    data.pop("_id", None)
-    data["updatedAt"] = datetime.utcnow()
-    bank_accounts_col.update_one({"_id": ObjectId(account_id)}, {"$set": data})
-    return serialize_doc(bank_accounts_col.find_one({"_id": ObjectId(account_id)}))
+    return serialize_doc_row(update_document("bank_accounts", account_id, set_fields=data))
 
 
 @router.delete("/{account_id}")
 def delete_bank_account(account_id: str, user=Depends(non_accountant)):
-    bank_accounts_col.delete_one({"_id": ObjectId(account_id)})
+    delete_document("bank_accounts", account_id)
     return {"message": "Bank account deleted"}

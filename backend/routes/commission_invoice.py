@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from bson import ObjectId
 from io import BytesIO
 from datetime import datetime
 from reportlab.lib import colors
@@ -18,7 +17,14 @@ import resend
 import base64
 import asyncio
 
-from database import trades_col, partners_col, bank_accounts_col
+from database import q_one, serialize_doc_row
+
+
+def _get(table, _id):
+    if not _id:
+        return None
+    row = q_one(f'SELECT * FROM "{table}" WHERE id = %s', (_id,))
+    return serialize_doc_row(row) if row else None
 
 # Register Liberation Sans fonts (free Arial equivalent, supports Turkish characters)
 _FONTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'fonts')
@@ -418,7 +424,7 @@ def generate_invoice_pdf(trade, invoice_number, invoice_date, issued_to_name, is
 
 def generate_ci_pdf(trade):
     """Generate Commission Invoice PDF and return BytesIO buffer."""
-    trade_id = str(trade["_id"])
+    trade_id = trade["id"]
     contract_num = trade.get("sellerContractNumber") or trade.get("BAContractNumber") or trade.get("referenceNumber") or trade_id
     brokerage_account = trade.get("brokerageAccount") or "seller"
 
@@ -433,7 +439,7 @@ def generate_ci_pdf(trade):
 
     if partner_id:
         try:
-            partner = partners_col.find_one({"_id": ObjectId(partner_id)})
+            partner = _get("partners", partner_id)
             if partner:
                 issued_to_name = partner.get("companyName", "")
                 addr_parts = [partner.get("address", ""), partner.get("city", ""), partner.get("country", "")]
@@ -464,7 +470,7 @@ def generate_ci_pdf(trade):
 
 @router.get("/{trade_id}")
 def get_commission_invoice_pdf(trade_id: str, account: str = "seller", bankIds: str = "", user=Depends(get_current_user)):
-    trade = trades_col.find_one({"_id": ObjectId(trade_id)})
+    trade = _get("trades", trade_id)
     if not trade:
         raise HTTPException(status_code=404, detail="Trade not found")
 
@@ -482,7 +488,7 @@ def get_commission_invoice_pdf(trade_id: str, account: str = "seller", bankIds: 
 
     if partner_id:
         try:
-            partner = partners_col.find_one({"_id": ObjectId(partner_id)})
+            partner = _get("partners", partner_id)
             if partner:
                 issued_to_name = partner.get("companyName", "")
                 addr_parts = [partner.get("address", ""), partner.get("city", ""), partner.get("country", "")]
@@ -501,9 +507,8 @@ def get_commission_invoice_pdf(trade_id: str, account: str = "seller", bankIds: 
             bid = bid.strip()
             if bid:
                 try:
-                    bank = bank_accounts_col.find_one({"_id": ObjectId(bid)})
+                    bank = _get("bank_accounts", bid)
                     if bank:
-                        bank.pop("_id", None)
                         selected_banks.append(bank)
                 except Exception:
                     pass
@@ -546,7 +551,7 @@ async def send_commission_invoice_email(req: SendCommissionInvoiceRequest, user=
     resend.api_key = os.environ.get("RESEND_API_KEY", "")
     SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "DealSpot Ltd <noreply@baticaret.com>")
 
-    trade = trades_col.find_one({"_id": ObjectId(req.tradeId)})
+    trade = _get("trades", req.tradeId)
     if not trade:
         raise HTTPException(status_code=404, detail="Trade not found")
 
@@ -562,7 +567,7 @@ async def send_commission_invoice_email(req: SendCommissionInvoiceRequest, user=
     partner_id = trade.get("buyerId") if brokerage_account == "buyer" else trade.get("sellerId")
     if partner_id:
         try:
-            partner = partners_col.find_one({"_id": ObjectId(partner_id)})
+            partner = _get("partners", partner_id)
             if partner:
                 recipient_name = partner.get("companyName", "")
         except Exception:

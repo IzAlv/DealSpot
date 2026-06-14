@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from bson import ObjectId
 from io import BytesIO
 from datetime import datetime
 from reportlab.lib import colors
@@ -13,8 +12,15 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import os, re
 
-from database import trades_col, partners_col
+from database import q_one, serialize_doc_row
 from auth import get_current_user
+
+
+def _get(table, _id):
+    if not _id:
+        return None
+    row = q_one(f'SELECT * FROM "{table}" WHERE id = %s', (_id,))
+    return serialize_doc_row(row) if row else None
 
 # Register Liberation Sans fonts (free Arial equivalent, supports Turkish characters)
 _FONTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'fonts')
@@ -81,9 +87,7 @@ def fmt_date_dot(d):
 
 def generate_sa_pdf(trade):
     """Generate Shipment Appropriation PDF and return BytesIO buffer."""
-    buyer = None
-    if trade.get("buyerId"):
-        buyer = partners_col.find_one({"_id": ObjectId(trade["buyerId"])})
+    buyer = _get("partners", trade.get("buyerId"))
 
     buyer_name = trade.get("buyerName") or (buyer.get("companyName") if buyer else "-")
     # Address: "Merkez / Çorum - Türkiye"
@@ -288,13 +292,13 @@ def generate_sa_pdf(trade):
 
 @router.get("/{trade_id}/pdf")
 def generate_shipment_appropriation_pdf(trade_id: str, user=Depends(get_current_user)):
-    trade = trades_col.find_one({"_id": ObjectId(trade_id)})
+    trade = _get("trades", trade_id)
     if not trade:
         raise HTTPException(status_code=404, detail="Trade not found")
 
     buf = generate_sa_pdf(trade)
     contract_no = trade.get("sellerContractNumber") or trade.get("BAContractNumber") or trade.get("contractNumber") or trade.get("referenceNumber") or "-"
-    trade_id_str = str(trade["_id"])
+    trade_id_str = str(trade["id"])
     filename = f"Shipment_Appropriation_{contract_no}_{trade_id_str[-6:]}.pdf"
     return StreamingResponse(
         buf,

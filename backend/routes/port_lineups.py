@@ -1,5 +1,6 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
-from database import db
+from database import q_one, q_all, execute
+from psycopg.types.json import Jsonb
 from auth import get_current_user
 from datetime import datetime, timezone
 import openpyxl
@@ -150,15 +151,13 @@ async def upload_port_report(file: UploadFile = File(...), current_user=Depends(
         raise HTTPException(status_code=400, detail="No valid port data found in the file")
 
     # Clear existing data and insert new
-    collection = db["port_lineups"]
-    collection.delete_many({})
-
-    now = datetime.now(timezone.utc).isoformat()
+    execute("DELETE FROM port_lineups")
+    now = datetime.now(timezone.utc)
     for report in reports:
-        report["uploadedAt"] = now
-        report["uploadedBy"] = current_user.get("username", "unknown")
-
-    collection.insert_many(reports)
+        execute(
+            "INSERT INTO port_lineups (report_date, ports, uploaded_at, uploaded_by) VALUES (%s, %s, %s, %s)",
+            (report["reportDate"], Jsonb(report["ports"]), now, current_user.get("username", "unknown")),
+        )
 
     return {
         "message": f"Successfully uploaded {len(reports)} daily reports",
@@ -173,8 +172,7 @@ async def upload_port_report(file: UploadFile = File(...), current_user=Depends(
 
 @router.get("/dates")
 async def get_report_dates(current_user=Depends(get_current_user)):
-    collection = db["port_lineups"]
-    dates = collection.distinct("reportDate")
+    dates = [r["report_date"] for r in q_all("SELECT DISTINCT report_date FROM port_lineups")]
 
     # Sort dates descending (newest first)
     def parse_date(d):
@@ -189,20 +187,19 @@ async def get_report_dates(current_user=Depends(get_current_user)):
 
 @router.get("/report/{report_date}")
 async def get_report(report_date: str, current_user=Depends(get_current_user)):
-    collection = db["port_lineups"]
-    doc = collection.find_one({"reportDate": report_date}, {"_id": 0})
-    if not doc:
+    row = q_one("SELECT report_date, ports, uploaded_at, uploaded_by FROM port_lineups WHERE report_date = %s", (report_date,))
+    if not row:
         raise HTTPException(status_code=404, detail=f"No report found for date {report_date}")
-    return doc
+    return {"reportDate": row["report_date"], "ports": row["ports"],
+            "uploadedAt": row["uploaded_at"].isoformat() if row["uploaded_at"] else None,
+            "uploadedBy": row["uploaded_by"]}
 
 
 @router.get("/summary")
 async def get_summary(current_user=Depends(get_current_user)):
     """Get a summary of latest report: port names, vessel counts."""
-    collection = db["port_lineups"]
-
     # Get the latest report date
-    dates = collection.distinct("reportDate")
+    dates = [r["report_date"] for r in q_all("SELECT DISTINCT report_date FROM port_lineups")]
     if not dates:
         return {"latestDate": None, "ports": [], "totalVessels": 0}
 
@@ -215,9 +212,10 @@ async def get_summary(current_user=Depends(get_current_user)):
     dates.sort(key=parse_date, reverse=True)
     latest_date = dates[0]
 
-    doc = collection.find_one({"reportDate": latest_date}, {"_id": 0})
-    if not doc:
+    row = q_one("SELECT ports FROM port_lineups WHERE report_date = %s", (latest_date,))
+    if not row:
         return {"latestDate": latest_date, "ports": [], "totalVessels": 0}
+    doc = {"ports": row["ports"]}
 
     port_summary = []
     total_vessels = 0
@@ -239,10 +237,11 @@ async def get_summary(current_user=Depends(get_current_user)):
 
 # ─── Monthly Line-Up ───
 
-UPLOAD_DIR = "/app/backend/uploads/monthly_lineups"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-monthly_col = db["monthly_lineups"]
+UPLOAD_DIR = os.path.join(os.environ.get("UPLOAD_DIR", "/app/backend/uploads"), "monthly_lineups")
+try:
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+except OSError:
+    pass
 
 
 def parse_monthly_excel(file_bytes: bytes, filename: str):
@@ -341,24 +340,19 @@ async def upload_monthly_lineup(file: UploadFile = File(...), current_user=Depen
         raise HTTPException(status_code=400, detail="No data found in Excel file")
 
     # Store file on disk
-    from bson import ObjectId
-    doc_id = ObjectId()
+    import uuid
+    doc_id = uuid.uuid4()
     ext = file.filename.rsplit('.', 1)[-1] if '.' in file.filename else 'xlsx'
-    stored_name = f"monthly_{doc_id}.{ext}"
+    stored_name = f"monthly_{doc_id.hex}.{ext}"
     with open(os.path.join(UPLOAD_DIR, stored_name), "wb") as f:
         f.write(file_bytes)
 
-    doc = {
-        "_id": doc_id,
-        "fileName": file.filename,
-        "storedFileName": stored_name,
-        "ports": parsed["ports"],
-        "totalVessels": parsed["totalVessels"],
-        "totalPorts": parsed["totalPorts"],
-        "uploadedAt": datetime.now(timezone.utc).isoformat(),
-        "uploadedBy": current_user.get("username", "unknown"),
-    }
-    monthly_col.insert_one(doc)
+    execute(
+        "INSERT INTO monthly_lineups (id, file_name, stored_file_name, ports, total_vessels, total_ports, uploaded_at, uploaded_by) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+        (doc_id, file.filename, stored_name, Jsonb(parsed["ports"]), parsed["totalVessels"], parsed["totalPorts"],
+         datetime.now(timezone.utc), current_user.get("username", "unknown")),
+    )
     return {
         "id": str(doc_id),
         "fileName": file.filename,
@@ -369,57 +363,56 @@ async def upload_monthly_lineup(file: UploadFile = File(...), current_user=Depen
 
 @router.get("/monthly/list")
 async def list_monthly_lineups(current_user=Depends(get_current_user)):
-    docs = list(monthly_col.find({}, {"ports": 0, "sheets": 0}).sort("uploadedAt", -1))
-    for d in docs:
-        d["id"] = str(d.pop("_id"))
-    return docs
+    rows = q_all("SELECT id, file_name, stored_file_name, total_vessels, total_ports, uploaded_at, uploaded_by "
+                 "FROM monthly_lineups ORDER BY uploaded_at DESC")
+    return [{"id": str(r["id"]), "fileName": r["file_name"], "storedFileName": r["stored_file_name"],
+             "totalVessels": r["total_vessels"], "totalPorts": r["total_ports"],
+             "uploadedAt": r["uploaded_at"].isoformat() if r["uploaded_at"] else None,
+             "uploadedBy": r["uploaded_by"]} for r in rows]
 
 
 @router.get("/monthly/{doc_id}")
 async def get_monthly_lineup(doc_id: str, current_user=Depends(get_current_user)):
-    from bson import ObjectId
-    doc = monthly_col.find_one({"_id": ObjectId(doc_id)})
-    if not doc:
+    row = q_one("SELECT * FROM monthly_lineups WHERE id = %s", (doc_id,))
+    if not row:
         raise HTTPException(status_code=404, detail="Not found")
-    doc["id"] = str(doc.pop("_id"))
-    # If old format with sheets, re-parse from file
-    if "sheets" in doc and "ports" not in doc:
-        stored = doc.get("storedFileName")
-        if stored:
-            fpath = os.path.join(UPLOAD_DIR, stored)
-            if os.path.exists(fpath):
-                with open(fpath, "rb") as f:
-                    parsed = parse_monthly_excel(f.read(), stored)
-                doc["ports"] = parsed["ports"]
-                doc["totalVessels"] = parsed["totalVessels"]
-                doc["totalPorts"] = parsed["totalPorts"]
-        doc.pop("sheets", None)
+    doc = {"id": str(row["id"]), "fileName": row["file_name"], "storedFileName": row["stored_file_name"],
+           "ports": row["ports"], "totalVessels": row["total_vessels"], "totalPorts": row["total_ports"],
+           "uploadedAt": row["uploaded_at"].isoformat() if row["uploaded_at"] else None,
+           "uploadedBy": row["uploaded_by"]}
+    # If old format with sheets (in data), re-parse from file
+    if not doc.get("ports") and (row.get("data") or {}).get("sheets") and row["stored_file_name"]:
+        fpath = os.path.join(UPLOAD_DIR, row["stored_file_name"])
+        if os.path.exists(fpath):
+            with open(fpath, "rb") as f:
+                parsed = parse_monthly_excel(f.read(), row["stored_file_name"])
+            doc["ports"] = parsed["ports"]
+            doc["totalVessels"] = parsed["totalVessels"]
+            doc["totalPorts"] = parsed["totalPorts"]
     return doc
 
 
 @router.delete("/monthly/{doc_id}")
 async def delete_monthly_lineup(doc_id: str, current_user=Depends(get_current_user)):
-    from bson import ObjectId
-    doc = monthly_col.find_one({"_id": ObjectId(doc_id)})
-    if not doc:
+    row = q_one("SELECT stored_file_name FROM monthly_lineups WHERE id = %s", (doc_id,))
+    if not row:
         raise HTTPException(status_code=404, detail="Not found")
-    stored = doc.get("storedFileName")
+    stored = row["stored_file_name"]
     if stored:
         fpath = os.path.join(UPLOAD_DIR, stored)
         if os.path.exists(fpath):
             os.remove(fpath)
-    monthly_col.delete_one({"_id": ObjectId(doc_id)})
+    execute("DELETE FROM monthly_lineups WHERE id = %s", (doc_id,))
     return {"message": "Deleted"}
 
 
 @router.get("/monthly/{doc_id}/download")
 async def download_monthly_lineup(doc_id: str, current_user=Depends(get_current_user)):
-    from bson import ObjectId
     from fastapi.responses import FileResponse
-    doc = monthly_col.find_one({"_id": ObjectId(doc_id)})
-    if not doc or not doc.get("storedFileName"):
+    row = q_one("SELECT file_name, stored_file_name FROM monthly_lineups WHERE id = %s", (doc_id,))
+    if not row or not row["stored_file_name"]:
         raise HTTPException(status_code=404, detail="File not found")
-    fpath = os.path.join(UPLOAD_DIR, doc["storedFileName"])
+    fpath = os.path.join(UPLOAD_DIR, row["stored_file_name"])
     if not os.path.exists(fpath):
         raise HTTPException(status_code=404, detail="File not on disk")
-    return FileResponse(fpath, filename=doc.get("fileName", "monthly_lineup.xlsx"), media_type="application/octet-stream")
+    return FileResponse(fpath, filename=row["file_name"] or "monthly_lineup.xlsx", media_type="application/octet-stream")

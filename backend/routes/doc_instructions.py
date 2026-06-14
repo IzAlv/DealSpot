@@ -9,9 +9,15 @@ from dotenv import load_dotenv
 load_dotenv()
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from bson import ObjectId
-from database import doc_instructions_col, trades_col, partners_col, ports_col, disport_agents_col, serialize_doc
+from database import q_one, q_all, insert_document, update_document, delete_document, serialize_doc_row
 from auth import get_current_user
+
+
+def _get(table, _id):
+    if not _id:
+        return None
+    row = q_one(f'SELECT * FROM "{table}" WHERE id = %s', (_id,))
+    return serialize_doc_row(row) if row else None
 
 try:
     import resend
@@ -75,7 +81,7 @@ def get_buyer_display(buyer_id):
     if not buyer_id:
         return ""
     try:
-        buyer = partners_col.find_one({"_id": ObjectId(buyer_id)})
+        buyer = _get("partners", buyer_id)
         if buyer:
             lines = [buyer.get("companyName", "")]
             if buyer.get("address"):
@@ -88,33 +94,31 @@ def get_buyer_display(buyer_id):
 
 @router.get("/")
 async def list_doc_instructions(tradeId: Optional[str] = None, user=Depends(get_current_user)):
-    query = {}
     if tradeId:
-        query["tradeId"] = tradeId
-    docs = list(doc_instructions_col.find(query).sort("createdAt", -1))
-    return [serialize_doc(d) for d in docs]
+        rows = q_all("SELECT * FROM doc_instructions WHERE trade_id = %s ORDER BY created_at DESC", (tradeId,))
+    else:
+        rows = q_all("SELECT * FROM doc_instructions ORDER BY created_at DESC")
+    return [serialize_doc_row(d) for d in rows]
 
 
 @router.get("/{di_id}")
 async def get_doc_instruction(di_id: str, user=Depends(get_current_user)):
-    doc = doc_instructions_col.find_one({"_id": ObjectId(di_id)})
+    doc = q_one("SELECT * FROM doc_instructions WHERE id = %s", (di_id,))
     if not doc:
         raise HTTPException(status_code=404, detail="Documentary Instruction not found")
-    return serialize_doc(doc)
+    return serialize_doc_row(doc)
 
 
 @router.post("/")
 async def create_doc_instruction(data: DocInstructionCreate, user=Depends(get_current_user)):
     # Verify trade exists
-    trade = trades_col.find_one({"_id": ObjectId(data.tradeId)})
+    trade = _get("trades", data.tradeId)
     if not trade:
         raise HTTPException(status_code=404, detail="Contract not found")
 
     doc = data.dict()
     doc["createdBy"] = user.get("username")
     doc["createdByName"] = user.get("name", user.get("username"))
-    doc["createdAt"] = datetime.now(timezone.utc).isoformat()
-    doc["updatedAt"] = datetime.now(timezone.utc).isoformat()
 
     # Auto-populate seller surveyor from trade if not provided
     if not doc.get("sellerSurveyor"):
@@ -126,15 +130,12 @@ async def create_doc_instruction(data: DocInstructionCreate, user=Depends(get_cu
     if data.notifyBuyerId:
         doc["notifyBuyerText"] = get_buyer_display(data.notifyBuyerId)
 
-    result = doc_instructions_col.insert_one(doc)
-    doc["_id"] = result.inserted_id
-    return serialize_doc(doc)
+    return serialize_doc_row(insert_document("doc_instructions", doc))
 
 
 @router.put("/{di_id}")
 async def update_doc_instruction(di_id: str, data: DocInstructionUpdate, user=Depends(get_current_user)):
     updates = {k: v for k, v in data.dict().items() if v is not None}
-    updates["updatedAt"] = datetime.now(timezone.utc).isoformat()
     updates["updatedBy"] = user.get("username")
 
     if data.consigneeBuyerId:
@@ -142,18 +143,15 @@ async def update_doc_instruction(di_id: str, data: DocInstructionUpdate, user=De
     if data.notifyBuyerId:
         updates["notifyBuyerText"] = get_buyer_display(data.notifyBuyerId)
 
-    result = doc_instructions_col.update_one({"_id": ObjectId(di_id)}, {"$set": updates})
-    if result.matched_count == 0:
+    doc = update_document("doc_instructions", di_id, set_fields=updates)
+    if doc is None:
         raise HTTPException(status_code=404, detail="Documentary Instruction not found")
-
-    doc = doc_instructions_col.find_one({"_id": ObjectId(di_id)})
-    return serialize_doc(doc)
+    return serialize_doc_row(doc)
 
 
 @router.delete("/{di_id}")
 async def delete_doc_instruction(di_id: str, user=Depends(get_current_user)):
-    result = doc_instructions_col.delete_one({"_id": ObjectId(di_id)})
-    if result.deleted_count == 0:
+    if delete_document("doc_instructions", di_id) == 0:
         raise HTTPException(status_code=404, detail="Documentary Instruction not found")
     return {"message": "Deleted"}
 
@@ -166,11 +164,11 @@ class DiSendEmailRequest(BaseModel):
 @router.post("/{di_id}/send-email")
 async def send_di_email(di_id: str, req: DiSendEmailRequest = DiSendEmailRequest(), user=Depends(get_current_user)):
     """Send the DI to the seller via email"""
-    doc = doc_instructions_col.find_one({"_id": ObjectId(di_id)})
+    doc = serialize_doc_row(q_one("SELECT * FROM doc_instructions WHERE id = %s", (di_id,)))
     if not doc:
         raise HTTPException(status_code=404, detail="Documentary Instruction not found")
 
-    trade = trades_col.find_one({"_id": ObjectId(doc["tradeId"])})
+    trade = _get("trades", doc["tradeId"])
     if not trade:
         raise HTTPException(status_code=404, detail="Contract not found")
 
@@ -213,7 +211,7 @@ async def send_di_email(di_id: str, req: DiSendEmailRequest = DiSendEmailRequest
     lp_id = trade.get("loadingPortId") or trade.get("basePortId")
     if lp_id:
         try:
-            lp = ports_col.find_one({"_id": ObjectId(lp_id)})
+            lp = _get("ports", lp_id)
             if lp:
                 loading_port_display = f"{lp.get('name', '')}, {lp.get('country', '')}"
         except Exception:
@@ -320,10 +318,8 @@ async def send_di_email(di_id: str, req: DiSendEmailRequest = DiSendEmailRequest
         await asyncio.to_thread(resend.Emails.send, params)
 
         # Mark as sent
-        doc_instructions_col.update_one(
-            {"_id": ObjectId(di_id)},
-            {"$set": {"sentAt": datetime.now(timezone.utc).isoformat(), "sentTo": seller_email}}
-        )
+        update_document("doc_instructions", di_id, set_fields={
+            "sentAt": datetime.now(timezone.utc).isoformat(), "sentTo": seller_email})
         return {"message": f"Email sent to {seller_email}", "sentTo": seller_email}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
@@ -334,7 +330,7 @@ async def extract_di_from_pdf(trade_id: str, user=Depends(get_current_user)):
     """Extract Documentary Instruction fields from uploaded DI PDF using AI"""
     from google import genai
 
-    trade = trades_col.find_one({"_id": ObjectId(trade_id)})
+    trade = _get("trades", trade_id)
     if not trade:
         raise HTTPException(status_code=404, detail="Trade not found")
 

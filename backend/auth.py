@@ -6,7 +6,7 @@ from jose import jwt, JWTError
 from passlib.context import CryptContext
 
 from config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_HOURS
-from database import users_col, serialize_doc
+from database import q_one, serialize_doc_row
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer(auto_error=False)
@@ -27,10 +27,10 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
         username = payload.get("sub")
         if username is None:
             raise HTTPException(status_code=401, detail="Invalid token")
-        user = users_col.find_one({"username": username})
+        user = q_one("SELECT * FROM users WHERE username = %s", (username,))
         if user is None:
             raise HTTPException(status_code=401, detail="User not found")
-        return serialize_doc(user)
+        return serialize_doc_row(user)
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 

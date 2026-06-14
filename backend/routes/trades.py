@@ -3,20 +3,31 @@ from typing import Optional
 import random
 import string
 import os
-import base64
 
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
-from bson import ObjectId
 
-from database import (
-    trades_col, partners_col, commodities_col, origins_col, ports_col,
-    invoices_col, serialize_doc, create_notification
-)
+from database import (q_all, q_one, insert_document, update_document, delete_document,
+                      execute, serialize_doc_row, create_notification)
 from auth import get_current_user, require_roles
 from models import TradeCreate, TradeStatusUpdate
 from config import TRADE_STATUSES
 
 non_accountant = require_roles("admin", "user")
+
+PROD_KEYWORDS = ["pellet", "husk", "bran", "meal", "pulp"]
+
+# (data_field, ref_table, name_field, code_field)
+_REF_FIELDS = [
+    ("buyerId", "partners", "buyerName", "buyerCode"),
+    ("sellerId", "partners", "sellerName", "sellerCode"),
+    ("brokerId", "partners", "brokerName", "brokerCode"),
+    ("coBrokerId", "partners", "coBrokerName", "coBrokerCode"),
+    ("commodityId", "commodities", "commodityName", None),
+    ("originId", "origins", "originName", None),
+    ("basePortId", "ports", "basePortName", None),
+    ("loadingPortId", "ports", "loadingPortName", None),
+    ("dischargePortId", "ports", "dischargePortName", None),
+]
 
 
 def generate_ref():
@@ -26,327 +37,250 @@ def generate_ref():
     return f"PIR-{year}-{letters}{num}"
 
 
+def _ref_data(table, ref_id):
+    if not ref_id:
+        return None
+    row = q_one(f'SELECT data FROM "{table}" WHERE id = %s', (ref_id,))
+    return (row.get("data") or {}) if row else None
+
+
+def _resolve_ref_names(data):
+    """Populate cached *Name/*Code/*Country fields from the referenced rows (mirrors old logic)."""
+    for field, table, name_field, code_field in _REF_FIELDS:
+        if data.get(field):
+            doc = _ref_data(table, data[field])
+            if doc:
+                data[name_field] = doc.get("companyName", doc.get("name", ""))
+                if code_field:
+                    data[code_field] = doc.get("companyCode", "")
+                if "Port" in name_field and doc.get("country"):
+                    data[name_field.replace("Name", "Country")] = doc.get("country", "")
+    if data.get("originId"):
+        origin = _ref_data("origins", data["originId"])
+        if origin and origin.get("adjective"):
+            data["originAdjective"] = origin["adjective"]
+
+
+def _compose_display_name(adj, cname, cyear):
+    year_prefix = "Prod." if any(kw in (cname or "").lower() for kw in PROD_KEYWORDS) else "Crop"
+    if adj and cname and cyear:
+        return f"{adj} {cname}, {year_prefix} {cyear}"
+    if adj and cname:
+        return f"{adj} {cname}"
+    return cname or ""
+
+
 router = APIRouter(prefix="/api/trades", tags=["trades"])
 
 
 @router.get("")
 def list_trades(status: Optional[str] = None, search: Optional[str] = None, user=Depends(non_accountant)):
-    query = {}
+    where, params = [], []
     if status and status != "all":
-        query["status"] = status
+        where.append("status = %s")
+        params.append(status)
     if search:
-        query["$or"] = [
-            {"BAContractNumber": {"$regex": search, "$options": "i"}},
-            {"referenceNumber": {"$regex": search, "$options": "i"}},
-            {"buyerName": {"$regex": search, "$options": "i"}},
-            {"sellerName": {"$regex": search, "$options": "i"}},
-            {"commodityName": {"$regex": search, "$options": "i"}},
-            {"vesselName": {"$regex": search, "$options": "i"}},
-        ]
-    return [serialize_doc(t) for t in trades_col.find(query).sort("createdAt", -1)]
+        like = f"%{search}%"
+        fields = ["BAContractNumber", "referenceNumber", "buyerName", "sellerName", "commodityName", "vesselName"]
+        where.append("(" + " OR ".join([f"data->>'{f}' ILIKE %s" for f in fields]) + ")")
+        params += [like] * len(fields)
+    sql = "SELECT * FROM trades"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY created_at DESC"
+    return [serialize_doc_row(t) for t in q_all(sql, params)]
 
 
 @router.post("")
 def create_trade(trade: TradeCreate, user=Depends(non_accountant)):
     data = trade.dict()
     data["referenceNumber"] = data.get("contractNumber") or generate_ref()
-    data["createdAt"] = datetime.utcnow()
-    data["updatedAt"] = datetime.utcnow()
-    for field, col, name_field, code_field in [
-        ("buyerId", partners_col, "buyerName", "buyerCode"),
-        ("sellerId", partners_col, "sellerName", "sellerCode"),
-        ("brokerId", partners_col, "brokerName", "brokerCode"),
-        ("coBrokerId", partners_col, "coBrokerName", "coBrokerCode"),
-        ("commodityId", commodities_col, "commodityName", None),
-        ("originId", origins_col, "originName", None),
-        ("basePortId", ports_col, "basePortName", None),
-        ("loadingPortId", ports_col, "loadingPortName", None),
-        ("dischargePortId", ports_col, "dischargePortName", None),
-    ]:
-        if data.get(field):
-            try:
-                doc = col.find_one({"_id": ObjectId(data[field])})
-                if doc:
-                    data[name_field] = doc.get("companyName", doc.get("name", ""))
-                    if code_field:
-                        data[code_field] = doc.get("companyCode", "")
-                    # Store port country
-                    if "Port" in name_field and doc.get("country"):
-                        data[name_field.replace("Name", "Country")] = doc.get("country", "")
-            except Exception:
-                pass
-    # Compose commodity display name with origin adjective and crop year
-    if data.get("originId"):
-        try:
-            origin_doc = origins_col.find_one({"_id": ObjectId(data["originId"])})
-            if origin_doc and origin_doc.get("adjective"):
-                data["originAdjective"] = origin_doc["adjective"]
-        except Exception:
-            pass
-    adj = data.get("originAdjective") or ""
-    cname = data.get("commodityName") or ""
-    cyear = data.get("cropYear") or ""
-    # Production commodities use "Prod." instead of "Crop"
-    prod_keywords = ["pellet", "husk", "bran", "meal", "pulp"]
-    year_prefix = "Prod." if any(kw in cname.lower() for kw in prod_keywords) else "Crop"
-    if adj and cname and cyear:
-        data["commodityDisplayName"] = f"{adj} {cname}, {year_prefix} {cyear}"
-    elif adj and cname:
-        data["commodityDisplayName"] = f"{adj} {cname}"
-    else:
-        data["commodityDisplayName"] = cname
-    qty = data.get("quantity") or 0
-    brok = data.get("brokeragePerMT") or 0
-    data["totalCommission"] = round(qty * brok, 2)
-    result = trades_col.insert_one(data)
-    data["_id"] = result.inserted_id
-    create_notification("trade", f"New trade created: {data.get('referenceNumber', '')}", str(result.inserted_id), user.get("username"), user.get("name"))
-    return serialize_doc(data)
+    _resolve_ref_names(data)
+    data["commodityDisplayName"] = _compose_display_name(
+        data.get("originAdjective") or "", data.get("commodityName") or "", data.get("cropYear") or "")
+    data["totalCommission"] = round((data.get("quantity") or 0) * (data.get("brokeragePerMT") or 0), 2)
+    row = insert_document("trades", data)
+    create_notification("trade", f"New trade created: {data.get('referenceNumber', '')}",
+                        str(row["id"]), user.get("username"), user.get("name"))
+    return serialize_doc_row(row)
 
 
 @router.get("/stats/overview")
 def trade_stats(user=Depends(non_accountant)):
-    total = trades_col.count_documents({})
-    completed = trades_col.count_documents({"status": "completed"})
-    cancelled = trades_col.count_documents({"status": {"$in": ["cancelled", "washout"]}})
-    active_trades = list(trades_col.find({"status": {"$nin": ["completed", "cancelled", "washout"]}}))
-    ongoing = sum(1 for t in active_trades if t.get("vesselName"))
-    pending = sum(1 for t in active_trades if not t.get("vesselName"))
-    pipeline = [{"$group": {"_id": "$status", "count": {"$sum": 1}}}]
-    status_dist = {item["_id"]: item["count"] for item in trades_col.aggregate(pipeline)}
+    total = q_one("SELECT count(*) c FROM trades")["c"]
+    completed = q_one("SELECT count(*) c FROM trades WHERE status = 'completed'")["c"]
+    active = q_all("SELECT data FROM trades WHERE status NOT IN ('completed','cancelled','washout')")
+    ongoing = sum(1 for t in active if (t.get("data") or {}).get("vesselName"))
+    pending = sum(1 for t in active if not (t.get("data") or {}).get("vesselName"))
+    status_dist = {r["status"]: r["c"] for r in q_all("SELECT status, count(*) c FROM trades GROUP BY status")}
     return {
         "totalTrades": total,
         "activeTrades": ongoing,
         "pendingTrades": pending,
         "completedTrades": completed,
         "completionRate": round((completed / total * 100) if total > 0 else 0, 1),
-        "statusDistribution": status_dist
+        "statusDistribution": status_dist,
     }
 
 
 @router.get("/{trade_id}")
 def get_trade(trade_id: str, user=Depends(non_accountant)):
-    trade = trades_col.find_one({"_id": ObjectId(trade_id)})
-    if not trade:
+    row = q_one("SELECT * FROM trades WHERE id = %s", (trade_id,))
+    if not row:
         raise HTTPException(status_code=404, detail="Trade not found")
-    return serialize_doc(trade)
+    return serialize_doc_row(row)
+
+
+def _auto_create_commission_invoice(t, trade_id, user):
+    """t = trade data dict. Mirrors the old auto-generated commission invoice logic."""
+    if q_one("SELECT 1 FROM invoices WHERE trade_id = %s AND auto_generated = true", (trade_id,)):
+        return
+    brokerage_per_mt = t.get("brokeragePerMT") or 0
+    quantity = t.get("quantity") or 0
+    commission_amount = brokerage_per_mt * quantity
+    contract_num = t.get("BAContractNumber") or t.get("referenceNumber") or trade_id
+    currency = t.get("currency") or "USD"
+    seller_name = t.get("sellerName") or ""
+    buyer_name = t.get("buyerName") or ""
+    seller_code = t.get("sellerCode") or ""
+    brokerage_account = t.get("brokerageAccount") or "seller"
+    payer_name = buyer_name if brokerage_account == "buyer" else seller_name
+    payer_id = t.get("buyerId") if brokerage_account == "buyer" else t.get("sellerId")
+    payer_code = ""
+    if payer_id:
+        partner = _ref_data("partners", payer_id)
+        if partner:
+            payer_code = partner.get("companyCode", "")
+    buyer_payment_date = t.get("buyerPaymentDate") or ""
+    commodity_name = t.get("commodityName") or ""
+    insert_document("invoices", {
+        "invoiceNumber": f"COMM-{contract_num}",
+        "vendorName": payer_code or seller_code or seller_name or payer_name or (t.get("brokerName") or "Broker"),
+        "vendorCode": payer_code or seller_code,
+        "amount": commission_amount,
+        "currency": currency,
+        "invoiceDate": buyer_payment_date,
+        "dueDate": "",
+        "category": "Commission Payment",
+        "description": f"Brokerage commission for {commodity_name} trade {contract_num} ({seller_name} -> {buyer_name}). Qty: {quantity:,.0f} MT x {brokerage_per_mt} {currency}/MT",
+        "status": "paid" if buyer_payment_date else "pending",
+        "direction": "incoming",
+        "tradeId": trade_id,
+        "autoGenerated": True,
+    })
+    create_notification("accounting", f"Commission invoice auto-created for trade {contract_num}",
+                        trade_id, user.get("username"), user.get("name"))
 
 
 @router.put("/{trade_id}")
 def update_trade(trade_id: str, body: dict, user=Depends(non_accountant)):
-    # Separate null fields (to unset) from non-null fields (to set)
-    fields_to_unset = {k: "" for k, v in body.items() if v is None}
+    old = q_one("SELECT data FROM trades WHERE id = %s", (trade_id,))
+    old_data = (old.get("data") or {}) if old else {}
+    old_status = old_data.get("status")
+
+    unset_fields = [k for k, v in body.items() if v is None]
     data = {k: v for k, v in body.items() if v is not None}
-    data["updatedAt"] = datetime.utcnow()
-    for field, col, name_field, code_field in [
-        ("buyerId", partners_col, "buyerName", "buyerCode"),
-        ("sellerId", partners_col, "sellerName", "sellerCode"),
-        ("brokerId", partners_col, "brokerName", "brokerCode"),
-        ("coBrokerId", partners_col, "coBrokerName", "coBrokerCode"),
-        ("commodityId", commodities_col, "commodityName", None),
-        ("originId", origins_col, "originName", None),
-        ("basePortId", ports_col, "basePortName", None),
-        ("loadingPortId", ports_col, "loadingPortName", None),
-        ("dischargePortId", ports_col, "dischargePortName", None),
-    ]:
-        if data.get(field):
-            try:
-                doc = col.find_one({"_id": ObjectId(data[field])})
-                if doc:
-                    data[name_field] = doc.get("companyName", doc.get("name", ""))
-                    if code_field:
-                        data[code_field] = doc.get("companyCode", "")
-                    # Store port country
-                    if "Port" in name_field and doc.get("country"):
-                        data[name_field.replace("Name", "Country")] = doc.get("country", "")
-            except Exception:
-                pass
-    # Compose commodity display name with origin adjective and crop year on update
+    _resolve_ref_names(data)
+
     if data.get("originId") or data.get("commodityId") or data.get("cropYear"):
-        existing_t = trades_col.find_one({"_id": ObjectId(trade_id)}) or {}
-        if data.get("originId"):
-            try:
-                origin_doc = origins_col.find_one({"_id": ObjectId(data["originId"])})
-                if origin_doc and origin_doc.get("adjective"):
-                    data["originAdjective"] = origin_doc["adjective"]
-            except Exception:
-                pass
-        adj = data.get("originAdjective") or existing_t.get("originAdjective") or ""
-        cname = data.get("commodityName") or existing_t.get("commodityName") or ""
-        cyear = data.get("cropYear") or existing_t.get("cropYear") or ""
-        prod_keywords = ["pellet", "husk", "bran", "meal", "pulp"]
-        year_prefix = "Prod." if any(kw in cname.lower() for kw in prod_keywords) else "Crop"
-        if adj and cname and cyear:
-            data["commodityDisplayName"] = f"{adj} {cname}, {year_prefix} {cyear}"
-        elif adj and cname:
-            data["commodityDisplayName"] = f"{adj} {cname}"
-        else:
-            data["commodityDisplayName"] = cname
+        adj = data.get("originAdjective") or old_data.get("originAdjective") or ""
+        cname = data.get("commodityName") or old_data.get("commodityName") or ""
+        cyear = data.get("cropYear") or old_data.get("cropYear") or ""
+        data["commodityDisplayName"] = _compose_display_name(adj, cname, cyear)
     if "quantity" in data or "brokeragePerMT" in data:
-        existing = trades_col.find_one({"_id": ObjectId(trade_id)})
-        qty = data.get("quantity", existing.get("quantity", 0) if existing else 0) or 0
-        brok = data.get("brokeragePerMT", existing.get("brokeragePerMT", 0) if existing else 0) or 0
+        qty = data.get("quantity", old_data.get("quantity", 0)) or 0
+        brok = data.get("brokeragePerMT", old_data.get("brokeragePerMT", 0)) or 0
         data["totalCommission"] = round(qty * brok, 2)
-    # Keep BAContractNumber, contractNumber, and referenceNumber in sync
     if data.get("BAContractNumber"):
         data["contractNumber"] = data["BAContractNumber"]
         data["referenceNumber"] = data["BAContractNumber"]
     elif data.get("contractNumber"):
         data["BAContractNumber"] = data["contractNumber"]
         data["referenceNumber"] = data["contractNumber"]
-    old_trade = trades_col.find_one({"_id": ObjectId(trade_id)})
-    old_status = old_trade.get("status") if old_trade else None
 
-    # Validate completion requirements
     if data.get("status") == "completed" and old_status != "completed":
-        check_trade = {**old_trade, **data} if old_trade else data
-        if not check_trade.get("buyerPaymentDate"):
+        check = {**old_data, **data}
+        if not check.get("buyerPaymentDate"):
             raise HTTPException(status_code=400, detail="Cannot complete: Payment Date From Buyer is required")
-        if not check_trade.get("swiftFilePath"):
+        if not check.get("swiftFilePath"):
             raise HTTPException(status_code=400, detail="Cannot complete: SWIFT Copy upload is required")
 
-    update_ops = {"$set": data}
-    if fields_to_unset:
-        update_ops["$unset"] = fields_to_unset
-    trades_col.update_one({"_id": ObjectId(trade_id)}, update_ops)
-    updated = trades_col.find_one({"_id": ObjectId(trade_id)})
-    create_notification("trade", f"Trade updated: {updated.get('BAContractNumber') or updated.get('referenceNumber', trade_id)}", trade_id, user.get("username"), user.get("name"))
+    update_document("trades", trade_id, set_fields=data, unset_fields=unset_fields)
+    updated_row = q_one("SELECT * FROM trades WHERE id = %s", (trade_id,))
+    updated = updated_row.get("data") or {}
+    create_notification("trade", f"Trade updated: {updated.get('BAContractNumber') or updated.get('referenceNumber', trade_id)}",
+                        trade_id, user.get("username"), user.get("name"))
 
-    # Auto-create commission invoice when trade is completed via PUT
     if data.get("status") == "completed" and old_status != "completed":
-        existing_inv = invoices_col.find_one({"tradeId": trade_id, "autoGenerated": True})
-        if not existing_inv:
-            brokerage_per_mt = updated.get("brokeragePerMT") or 0
-            quantity = updated.get("quantity") or 0
-            commission_amount = brokerage_per_mt * quantity
-            contract_num = updated.get("BAContractNumber") or updated.get("referenceNumber") or trade_id
-            broker_name = updated.get("brokerName") or "Broker"
-            commodity_name = updated.get("commodityName") or ""
-            currency = updated.get("currency") or "USD"
-            seller_name = updated.get("sellerName") or ""
-            buyer_name = updated.get("buyerName") or ""
-            seller_code = updated.get("sellerCode") or ""
-            buyer_code = updated.get("buyerCode") or ""
-            brokerage_account = updated.get("brokerageAccount") or "seller"
-            payer_name = buyer_name if brokerage_account == "buyer" else seller_name
-            payer_id = updated.get("buyerId") if brokerage_account == "buyer" else updated.get("sellerId")
-            payer_code = ""
-            if payer_id:
-                partner = partners_col.find_one({"_id": ObjectId(payer_id)})
-                if partner:
-                    payer_code = partner.get("companyCode", "")
-            buyer_payment_date = updated.get("buyerPaymentDate") or ""
-            invoice_data = {
-                "invoiceNumber": f"COMM-{contract_num}",
-                "vendorName": payer_code or seller_code or seller_name or payer_name or broker_name,
-                "vendorCode": payer_code or seller_code,
-                "amount": commission_amount,
-                "currency": currency,
-                "invoiceDate": buyer_payment_date,
-                "dueDate": "",
-                "category": "Commission Payment",
-                "description": f"Brokerage commission for {commodity_name} trade {contract_num} ({seller_name} -> {buyer_name}). Qty: {quantity:,.0f} MT x {brokerage_per_mt} {currency}/MT",
-                "status": "paid" if buyer_payment_date else "pending",
-                "direction": "incoming",
-                "tradeId": trade_id,
-                "autoGenerated": True,
-                "createdAt": datetime.utcnow(),
-            }
-            invoices_col.insert_one(invoice_data)
-            create_notification("accounting", f"Commission invoice auto-created for trade {contract_num}", trade_id, user.get("username"), user.get("name"))
+        _auto_create_commission_invoice(updated, trade_id, user)
 
-    # Sync buyerPaymentDate to accounting invoice
     if "buyerPaymentDate" in data:
         payment_date = data["buyerPaymentDate"]
-        inv_update = {"invoiceDate": payment_date}
         if payment_date:
-            inv_update["status"] = "paid"
+            execute("UPDATE invoices SET data = data || %s::jsonb, invoice_date = %s, status = 'paid' "
+                    "WHERE trade_id = %s AND auto_generated = true",
+                    ('{"status":"paid"}', payment_date, trade_id))
+            execute("UPDATE invoices SET data = jsonb_set(data, '{invoiceDate}', to_jsonb(%s::text)) "
+                    "WHERE trade_id = %s AND auto_generated = true", (payment_date, trade_id))
         else:
-            inv_update["status"] = "pending"
-            inv_update["invoiceDate"] = ""
-        invoices_col.update_many(
-            {"tradeId": trade_id, "autoGenerated": True},
-            {"$set": inv_update}
-        )
+            execute("UPDATE invoices SET status = 'pending', invoice_date = '', "
+                    "data = jsonb_set(jsonb_set(data, '{status}', '\"pending\"'), '{invoiceDate}', '\"\"') "
+                    "WHERE trade_id = %s AND auto_generated = true", (trade_id,))
 
-    return serialize_doc(updated)
+    return serialize_doc_row(updated_row)
 
 
 @router.patch("/{trade_id}/status")
 def update_trade_status(trade_id: str, body: TradeStatusUpdate, user=Depends(non_accountant)):
-    old_trade = trades_col.find_one({"_id": ObjectId(trade_id)})
-    old_status = old_trade.get("status") if old_trade else None
+    old = q_one("SELECT data FROM trades WHERE id = %s", (trade_id,))
+    old_data = (old.get("data") or {}) if old else {}
+    old_status = old_data.get("status")
 
-    # Validate completion requirements
     if body.status == "completed" and old_status != "completed":
-        if not old_trade.get("buyerPaymentDate"):
+        if not old_data.get("buyerPaymentDate"):
             raise HTTPException(status_code=400, detail="Cannot complete: Payment Date From Buyer is required")
-        if not old_trade.get("swiftFilePath"):
+        if not old_data.get("swiftFilePath"):
             raise HTTPException(status_code=400, detail="Cannot complete: SWIFT Copy upload is required")
 
-    trades_col.update_one({"_id": ObjectId(trade_id)}, {"$set": {"status": body.status, "updatedAt": datetime.utcnow()}})
-    t = trades_col.find_one({"_id": ObjectId(trade_id)})
-    create_notification("trade", f"Trade {t.get('referenceNumber', trade_id)} status changed to {body.status}", trade_id, user.get("username"), user.get("name"))
+    update_document("trades", trade_id, set_fields={"status": body.status})
+    t = (q_one("SELECT data FROM trades WHERE id = %s", (trade_id,)).get("data") or {})
+    create_notification("trade", f"Trade {t.get('referenceNumber', trade_id)} status changed to {body.status}",
+                        trade_id, user.get("username"), user.get("name"))
 
-    # Auto-create commission invoice when trade is completed
     if body.status == "completed" and old_status != "completed":
-        existing = invoices_col.find_one({"tradeId": trade_id, "autoGenerated": True})
-        if not existing:
-            brokerage_per_mt = t.get("brokeragePerMT") or 0
-            quantity = t.get("quantity") or 0
-            commission_amount = brokerage_per_mt * quantity
-            contract_num = t.get("BAContractNumber") or t.get("referenceNumber") or trade_id
-            broker_name = t.get("brokerName") or "Broker"
-            commodity_name = t.get("commodityName") or ""
-            currency = t.get("currency") or "USD"
-            seller_name = t.get("sellerName") or ""
-            buyer_name = t.get("buyerName") or ""
-            seller_code = t.get("sellerCode") or ""
-            buyer_code = t.get("buyerCode") or ""
-            brokerage_account = t.get("brokerageAccount") or "seller"
-            payer_name = buyer_name if brokerage_account == "buyer" else seller_name
-            payer_id = t.get("buyerId") if brokerage_account == "buyer" else t.get("sellerId")
-            payer_code = ""
-            if payer_id:
-                partner = partners_col.find_one({"_id": ObjectId(payer_id)})
-                if partner:
-                    payer_code = partner.get("companyCode", "")
+        _auto_create_commission_invoice(t, trade_id, user)
 
-            buyer_payment_date = t.get("buyerPaymentDate") or ""
-            invoice_data = {
-                "invoiceNumber": f"COMM-{contract_num}",
-                "vendorName": payer_code or seller_code or seller_name or payer_name or broker_name,
-                "vendorCode": payer_code or seller_code,
-                "amount": commission_amount,
-                "currency": currency,
-                "invoiceDate": buyer_payment_date,
-                "dueDate": "",
-                "category": "Commission Payment",
-                "description": f"Brokerage commission for {commodity_name} trade {contract_num} ({seller_name} -> {buyer_name}). Qty: {quantity:,.0f} MT x {brokerage_per_mt} {currency}/MT",
-                "status": "paid" if buyer_payment_date else "pending",
-                "direction": "incoming",
-                "tradeId": trade_id,
-                "autoGenerated": True,
-                "createdAt": datetime.utcnow(),
-            }
-            invoices_col.insert_one(invoice_data)
-            create_notification("accounting", f"Commission invoice auto-created for trade {contract_num}", trade_id, user.get("username"), user.get("name"))
-
-    return serialize_doc(t)
+    return serialize_doc_row(q_one("SELECT * FROM trades WHERE id = %s", (trade_id,)))
 
 
 @router.delete("/{trade_id}")
 def delete_trade(trade_id: str, user=Depends(non_accountant)):
-    t = trades_col.find_one({"_id": ObjectId(trade_id)})
-    result = trades_col.delete_one({"_id": ObjectId(trade_id)})
-    if result.deleted_count == 0:
+    existing = q_one("SELECT data FROM trades WHERE id = %s", (trade_id,))
+    if existing is None:
         raise HTTPException(status_code=404, detail="Trade not found")
-    create_notification("trade", f"Trade deleted: {t.get('referenceNumber', trade_id) if t else trade_id}", trade_id, user.get("username"), user.get("name"))
+    ref = (existing.get("data") or {}).get("referenceNumber", trade_id)
+    delete_document("trades", trade_id)
+    create_notification("trade", f"Trade deleted: {ref}", trade_id, user.get("username"), user.get("name"))
     return {"message": "Trade deleted"}
 
 
-UPLOAD_DIR = "/app/backend/uploads"
+# ─── File uploads ────────────────────────────────────────────────────────────
+UPLOAD_DIR = os.environ.get("UPLOAD_DIR", "/app/backend/uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+def _require_trade(trade_id):
+    row = q_one("SELECT * FROM trades WHERE id = %s", (trade_id,))
+    if not row:
+        raise HTTPException(status_code=404, detail="Trade not found")
+    return row
+
+
+async def _save_upload(file, filename):
+    filepath = os.path.join(UPLOAD_DIR, filename)
+    with open(filepath, "wb") as f:
+        f.write(await file.read())
+    return filepath
 
 
 @router.post("/{trade_id}/upload-di")
@@ -355,212 +289,113 @@ async def upload_di_document(trade_id: str, file: UploadFile = File(...), user=D
         raise HTTPException(status_code=400, detail="Only PDF and Word documents are allowed")
     ext = file.filename.rsplit('.', 1)[-1]
     filename = f"di_{trade_id}.{ext}"
-    filepath = os.path.join(UPLOAD_DIR, filename)
-    content = await file.read()
-    with open(filepath, "wb") as f:
-        f.write(content)
-    trades_col.update_one(
-        {"_id": ObjectId(trade_id)},
-        {"$set": {"diDocumentFilename": file.filename, "diDocumentPath": filename}}
-    )
+    await _save_upload(file, filename)
+    update_document("trades", trade_id, set_fields={"diDocumentFilename": file.filename, "diDocumentPath": filename})
     return {"filename": file.filename, "path": filename}
 
 
 @router.get("/{trade_id}/download-di")
 def download_di_document(trade_id: str, user=Depends(non_accountant)):
     from fastapi.responses import FileResponse
-    trade = trades_col.find_one({"_id": ObjectId(trade_id)})
-    if not trade or not trade.get("diDocumentPath"):
+    t = _require_trade(trade_id).get("data") or {}
+    if not t.get("diDocumentPath"):
         raise HTTPException(status_code=404, detail="No DI document found")
-    filepath = os.path.join(UPLOAD_DIR, trade["diDocumentPath"])
+    filepath = os.path.join(UPLOAD_DIR, t["diDocumentPath"])
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(filepath, filename=trade.get("diDocumentFilename", "di_document"), media_type="application/octet-stream")
+    return FileResponse(filepath, filename=t.get("diDocumentFilename", "di_document"), media_type="application/octet-stream")
 
 
 @router.delete("/{trade_id}/upload-di")
 def delete_di_document(trade_id: str, user=Depends(non_accountant)):
-    trade = trades_col.find_one({"_id": ObjectId(trade_id)})
-    if not trade or not trade.get("diDocumentPath"):
+    t = _require_trade(trade_id).get("data") or {}
+    if not t.get("diDocumentPath"):
         raise HTTPException(status_code=404, detail="No DI document found")
-    filepath = os.path.join(UPLOAD_DIR, trade["diDocumentPath"])
+    filepath = os.path.join(UPLOAD_DIR, t["diDocumentPath"])
     if os.path.exists(filepath):
         os.remove(filepath)
-    trades_col.update_one(
-        {"_id": ObjectId(trade_id)},
-        {"$unset": {"diDocumentFilename": "", "diDocumentPath": ""}, "$set": {"diReceived": False}}
-    )
+    update_document("trades", trade_id, set_fields={"diReceived": False},
+                    unset_fields=["diDocumentFilename", "diDocumentPath"])
     return {"message": "DI document deleted"}
 
 
-@router.post("/{trade_id}/upload-swift")
-async def upload_swift_copy(trade_id: str, file: UploadFile = File(...), user=Depends(non_accountant)):
-    ext = os.path.splitext(file.filename)[1]
-    filename = f"swift_{trade_id}{ext}"
-    filepath = os.path.join(UPLOAD_DIR, filename)
-    content = await file.read()
-    with open(filepath, "wb") as f:
-        f.write(content)
-    trades_col.update_one(
-        {"_id": ObjectId(trade_id)},
-        {"$set": {"swiftFileName": file.filename, "swiftFilePath": filename}}
-    )
-    return serialize_doc(trades_col.find_one({"_id": ObjectId(trade_id)}))
+def _make_file_endpoints(kind, name_field, path_field, prefix):
+    @router.post(f"/{{trade_id}}/upload-{kind}")
+    async def _upload(trade_id: str, file: UploadFile = File(...), user=Depends(non_accountant)):
+        ext = os.path.splitext(file.filename)[1]
+        filename = f"{prefix}_{trade_id}{ext}"
+        await _save_upload(file, filename)
+        update_document("trades", trade_id, set_fields={name_field: file.filename, path_field: filename})
+        return serialize_doc_row(q_one("SELECT * FROM trades WHERE id = %s", (trade_id,)))
+
+    @router.get(f"/{{trade_id}}/download-{kind}")
+    def _download(trade_id: str, user=Depends(non_accountant)):
+        from fastapi.responses import FileResponse
+        t = _require_trade(trade_id).get("data") or {}
+        if not t.get(path_field):
+            raise HTTPException(status_code=404, detail=f"No {kind} found")
+        filepath = os.path.join(UPLOAD_DIR, t[path_field])
+        if not os.path.exists(filepath):
+            raise HTTPException(status_code=404, detail="File not found")
+        return FileResponse(filepath, filename=t.get(name_field, kind), media_type="application/octet-stream")
+
+    @router.delete(f"/{{trade_id}}/upload-{kind}")
+    def _delete(trade_id: str, user=Depends(non_accountant)):
+        t = _require_trade(trade_id).get("data") or {}
+        if not t.get(path_field):
+            raise HTTPException(status_code=404, detail=f"No {kind} found")
+        filepath = os.path.join(UPLOAD_DIR, t[path_field])
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        update_document("trades", trade_id, set_fields={}, unset_fields=[name_field, path_field])
+        return {"message": f"{kind} deleted"}
+    return _upload, _download, _delete
 
 
-@router.get("/{trade_id}/download-swift")
-def download_swift_copy(trade_id: str, user=Depends(non_accountant)):
-    from fastapi.responses import FileResponse
-    trade = trades_col.find_one({"_id": ObjectId(trade_id)})
-    if not trade or not trade.get("swiftFilePath"):
-        raise HTTPException(status_code=404, detail="No SWIFT copy found")
-    filepath = os.path.join(UPLOAD_DIR, trade["swiftFilePath"])
-    if not os.path.exists(filepath):
-        raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(filepath, filename=trade.get("swiftFileName", "swift_copy"), media_type="application/octet-stream")
+_make_file_endpoints("swift", "swiftFileName", "swiftFilePath", "swift")
+_make_file_endpoints("shortage-doc", "shortageDocFileName", "shortageDocFilePath", "shortage_doc")
+_make_file_endpoints("shortage-invoice", "shortageInvFileName", "shortageInvFilePath", "shortage_inv")
 
 
-@router.delete("/{trade_id}/upload-swift")
-def delete_swift_copy(trade_id: str, user=Depends(non_accountant)):
-    trade = trades_col.find_one({"_id": ObjectId(trade_id)})
-    if not trade or not trade.get("swiftFilePath"):
-        raise HTTPException(status_code=404, detail="No SWIFT copy found")
-    filepath = os.path.join(UPLOAD_DIR, trade["swiftFilePath"])
-    if os.path.exists(filepath):
-        os.remove(filepath)
-    trades_col.update_one(
-        {"_id": ObjectId(trade_id)},
-        {"$unset": {"swiftFileName": "", "swiftFilePath": ""}}
-    )
-    return {"message": "SWIFT copy deleted"}
-
-
-# --- Shortage Document Upload/Download/Delete ---
-@router.post("/{trade_id}/upload-shortage-doc")
-async def upload_shortage_doc(trade_id: str, file: UploadFile = File(...), user=Depends(non_accountant)):
-    ext = os.path.splitext(file.filename)[1]
-    filename = f"shortage_doc_{trade_id}{ext}"
-    filepath = os.path.join(UPLOAD_DIR, filename)
-    content = await file.read()
-    with open(filepath, "wb") as f:
-        f.write(content)
-    trades_col.update_one({"_id": ObjectId(trade_id)}, {"$set": {"shortageDocFileName": file.filename, "shortageDocFilePath": filename}})
-    return serialize_doc(trades_col.find_one({"_id": ObjectId(trade_id)}))
-
-@router.get("/{trade_id}/download-shortage-doc")
-def download_shortage_doc(trade_id: str, user=Depends(non_accountant)):
-    from fastapi.responses import FileResponse
-    trade = trades_col.find_one({"_id": ObjectId(trade_id)})
-    if not trade or not trade.get("shortageDocFilePath"):
-        raise HTTPException(status_code=404, detail="No shortage document found")
-    filepath = os.path.join(UPLOAD_DIR, trade["shortageDocFilePath"])
-    if not os.path.exists(filepath):
-        raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(filepath, filename=trade.get("shortageDocFileName", "shortage_doc"), media_type="application/octet-stream")
-
-@router.delete("/{trade_id}/upload-shortage-doc")
-def delete_shortage_doc(trade_id: str, user=Depends(non_accountant)):
-    trade = trades_col.find_one({"_id": ObjectId(trade_id)})
-    if not trade or not trade.get("shortageDocFilePath"):
-        raise HTTPException(status_code=404, detail="No shortage document found")
-    filepath = os.path.join(UPLOAD_DIR, trade["shortageDocFilePath"])
-    if os.path.exists(filepath):
-        os.remove(filepath)
-    trades_col.update_one({"_id": ObjectId(trade_id)}, {"$unset": {"shortageDocFileName": "", "shortageDocFilePath": ""}})
-    return {"message": "Shortage document deleted"}
-
-
-# --- Shortage Invoice Upload/Download/Delete ---
-@router.post("/{trade_id}/upload-shortage-invoice")
-async def upload_shortage_invoice(trade_id: str, file: UploadFile = File(...), user=Depends(non_accountant)):
-    ext = os.path.splitext(file.filename)[1]
-    filename = f"shortage_inv_{trade_id}{ext}"
-    filepath = os.path.join(UPLOAD_DIR, filename)
-    content = await file.read()
-    with open(filepath, "wb") as f:
-        f.write(content)
-    trades_col.update_one({"_id": ObjectId(trade_id)}, {"$set": {"shortageInvFileName": file.filename, "shortageInvFilePath": filename}})
-    return serialize_doc(trades_col.find_one({"_id": ObjectId(trade_id)}))
-
-@router.get("/{trade_id}/download-shortage-invoice")
-def download_shortage_invoice(trade_id: str, user=Depends(non_accountant)):
-    from fastapi.responses import FileResponse
-    trade = trades_col.find_one({"_id": ObjectId(trade_id)})
-    if not trade or not trade.get("shortageInvFilePath"):
-        raise HTTPException(status_code=404, detail="No shortage invoice found")
-    filepath = os.path.join(UPLOAD_DIR, trade["shortageInvFilePath"])
-    if not os.path.exists(filepath):
-        raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(filepath, filename=trade.get("shortageInvFileName", "shortage_invoice"), media_type="application/octet-stream")
-
-@router.delete("/{trade_id}/upload-shortage-invoice")
-def delete_shortage_invoice(trade_id: str, user=Depends(non_accountant)):
-    trade = trades_col.find_one({"_id": ObjectId(trade_id)})
-    if not trade or not trade.get("shortageInvFilePath"):
-        raise HTTPException(status_code=404, detail="No shortage invoice found")
-    filepath = os.path.join(UPLOAD_DIR, trade["shortageInvFilePath"])
-    if os.path.exists(filepath):
-        os.remove(filepath)
-    trades_col.update_one({"_id": ObjectId(trade_id)}, {"$unset": {"shortageInvFileName": "", "shortageInvFilePath": ""}})
-    return {"message": "Shortage invoice deleted"}
-
-
-# --- Shortage Payment Date ---
 @router.put("/{trade_id}/shortage-payment-date")
 async def update_shortage_payment_date(trade_id: str, body: dict, user=Depends(non_accountant)):
-    date_val = body.get("shortagePaymentDate", "")
-    trades_col.update_one({"_id": ObjectId(trade_id)}, {"$set": {"shortagePaymentDate": date_val}})
-    return serialize_doc(trades_col.find_one({"_id": ObjectId(trade_id)}))
+    update_document("trades", trade_id, set_fields={"shortagePaymentDate": body.get("shortagePaymentDate", "")})
+    return serialize_doc_row(q_one("SELECT * FROM trades WHERE id = %s", (trade_id,)))
 
 
+# ─── Draft documents (nested array) ──────────────────────────────────────────
 @router.get("/{trade_id}/draft-documents")
 def get_draft_documents(trade_id: str, user=Depends(non_accountant)):
-    trade = trades_col.find_one({"_id": ObjectId(trade_id)})
-    if not trade:
-        raise HTTPException(status_code=404, detail="Trade not found")
-    return trade.get("draftDocuments", [])
+    return (_require_trade(trade_id).get("data") or {}).get("draftDocuments", [])
 
 
 @router.post("/{trade_id}/draft-documents")
 async def upload_draft_document(trade_id: str, file: UploadFile = File(...), docName: str = "", user=Depends(non_accountant)):
-    trade = trades_col.find_one({"_id": ObjectId(trade_id)})
-    if not trade:
-        raise HTTPException(status_code=404, detail="Trade not found")
+    t = _require_trade(trade_id).get("data") or {}
     draft_dir = os.path.join(UPLOAD_DIR, "drafts", trade_id)
     os.makedirs(draft_dir, exist_ok=True)
-    ext = os.path.splitext(file.filename)[1]
     import uuid
-    stored_name = f"{uuid.uuid4().hex[:8]}{ext}"
-    path = os.path.join(draft_dir, stored_name)
+    ext = os.path.splitext(file.filename)[1]
+    path = os.path.join(draft_dir, f"{uuid.uuid4().hex[:8]}{ext}")
     with open(path, "wb") as f:
         f.write(await file.read())
-    doc_entry = {
-        "docName": docName,
-        "fileName": file.filename,
-        "storedPath": path,
-        "uploadedAt": datetime.now(timezone.utc).isoformat()
-    }
-    trades_col.update_one(
-        {"_id": ObjectId(trade_id)},
-        {"$push": {"draftDocuments": doc_entry}}
-    )
-    return trades_col.find_one({"_id": ObjectId(trade_id)}).get("draftDocuments", [])
+    drafts = t.get("draftDocuments", []) or []
+    drafts.append({"docName": docName, "fileName": file.filename, "storedPath": path,
+                   "uploadedAt": datetime.now(timezone.utc).isoformat()})
+    update_document("trades", trade_id, set_fields={"draftDocuments": drafts})
+    return drafts
 
 
 @router.delete("/{trade_id}/draft-documents/{doc_index}")
 def delete_draft_document(trade_id: str, doc_index: int, user=Depends(non_accountant)):
-    trade = trades_col.find_one({"_id": ObjectId(trade_id)})
-    if not trade:
-        raise HTTPException(status_code=404, detail="Trade not found")
-    drafts = trade.get("draftDocuments", [])
+    drafts = (_require_trade(trade_id).get("data") or {}).get("draftDocuments", []) or []
     if doc_index < 0 or doc_index >= len(drafts):
         raise HTTPException(status_code=404, detail="Document not found")
-    doc = drafts[doc_index]
-    path = doc.get("storedPath", "")
+    path = drafts[doc_index].get("storedPath", "")
     if path and os.path.exists(path):
         os.remove(path)
     drafts.pop(doc_index)
-    trades_col.update_one({"_id": ObjectId(trade_id)}, {"$set": {"draftDocuments": drafts}})
+    update_document("trades", trade_id, set_fields={"draftDocuments": drafts})
     return drafts
 
 
@@ -568,10 +403,7 @@ def delete_draft_document(trade_id: str, doc_index: int, user=Depends(non_accoun
 def download_draft_document(trade_id: str, doc_index: int, user=Depends(non_accountant)):
     from fastapi.responses import FileResponse
     import mimetypes
-    trade = trades_col.find_one({"_id": ObjectId(trade_id)})
-    if not trade:
-        raise HTTPException(status_code=404, detail="Trade not found")
-    drafts = trade.get("draftDocuments", [])
+    drafts = (_require_trade(trade_id).get("data") or {}).get("draftDocuments", []) or []
     if doc_index < 0 or doc_index >= len(drafts):
         raise HTTPException(status_code=404, detail="Document not found")
     doc = drafts[doc_index]
@@ -579,44 +411,32 @@ def download_draft_document(trade_id: str, doc_index: int, user=Depends(non_acco
     if not path or not os.path.exists(path):
         raise HTTPException(status_code=404, detail="File not found on disk")
     filename = doc.get("fileName", "document")
-    content_type, _ = mimetypes.guess_type(filename)
-    if not content_type:
-        content_type = "application/octet-stream"
+    content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
     return FileResponse(path, filename=filename, media_type=content_type)
 
 
 @router.put("/{trade_id}/draft-documents/{doc_index}/reassign")
 def reassign_draft_document(trade_id: str, doc_index: int, body: dict, user=Depends(non_accountant)):
-    trade = trades_col.find_one({"_id": ObjectId(trade_id)})
-    if not trade:
-        raise HTTPException(status_code=404, detail="Trade not found")
-    drafts = trade.get("draftDocuments", [])
+    drafts = (_require_trade(trade_id).get("data") or {}).get("draftDocuments", []) or []
     if doc_index < 0 or doc_index >= len(drafts):
         raise HTTPException(status_code=404, detail="Document not found")
-    new_name = body.get("docName", "_unassigned")
-    drafts[doc_index]["docName"] = new_name
-    trades_col.update_one({"_id": ObjectId(trade_id)}, {"$set": {"draftDocuments": drafts}})
+    drafts[doc_index]["docName"] = body.get("docName", "_unassigned")
+    update_document("trades", trade_id, set_fields={"draftDocuments": drafts})
     return drafts
-
-
 
 
 @router.post("/{trade_id}/buyer-payment")
 def set_buyer_payment(trade_id: str, body: dict, user=Depends(non_accountant)):
     payment_date = body.get("paymentDate", "")
-    trade = trades_col.find_one({"_id": ObjectId(trade_id)})
-    if not trade:
-        raise HTTPException(status_code=404, detail="Trade not found")
+    t = (_require_trade(trade_id).get("data") or {})
 
     def calc_due_date(date_str):
-        """15 days from date, skip to Monday if falls on Sat/Sun (Turkey weekends)"""
         try:
             d, m, y = date_str.split('/')
             base = datetime(int(y), int(m), int(d))
         except Exception:
             return ""
         due = base + timedelta(days=15)
-        # Saturday=5, Sunday=6
         if due.weekday() == 5:
             due += timedelta(days=2)
         elif due.weekday() == 6:
@@ -624,58 +444,32 @@ def set_buyer_payment(trade_id: str, body: dict, user=Depends(non_accountant)):
         return due.strftime('%d/%m/%Y')
 
     if payment_date:
-        inv_no = trade.get("invoiceNo") or f"COMM-{trade.get('BAContractNumber') or trade.get('referenceNumber') or ''}"
-        trades_col.update_one(
-            {"_id": ObjectId(trade_id)},
-            {"$set": {
-                "buyerPaymentDate": payment_date,
-                "invoiceDate": payment_date,
-                "invoiceNo": inv_no,
-                "status": "completed",
-                "invoicePaid": True,
-            }}
-        )
-        commission = (trade.get("blQuantity") or trade.get("quantity") or 0) * (trade.get("brokeragePerMT") or 0)
-        currency = trade.get("invoiceCurrency") or trade.get("brokerageCurrency") or "USD"
-        if trade.get("invoiceCurrency") == "EUR" and trade.get("exchangeRate"):
-            commission = commission * trade["exchangeRate"]
+        inv_no = t.get("invoiceNo") or f"COMM-{t.get('BAContractNumber') or t.get('referenceNumber') or ''}"
+        update_document("trades", trade_id, set_fields={
+            "buyerPaymentDate": payment_date, "invoiceDate": payment_date, "invoiceNo": inv_no,
+            "status": "completed", "invoicePaid": True})
+        commission = (t.get("blQuantity") or t.get("quantity") or 0) * (t.get("brokeragePerMT") or 0)
+        currency = t.get("invoiceCurrency") or t.get("brokerageCurrency") or "USD"
+        if t.get("invoiceCurrency") == "EUR" and t.get("exchangeRate"):
+            commission = commission * t["exchangeRate"]
         due_date = calc_due_date(payment_date)
-        existing = invoices_col.find_one({"tradeId": trade_id, "autoGenerated": True, "direction": "incoming"})
-        invoice_data = {
-            "paymentDate": payment_date,
-            "invoiceDate": payment_date,
-            "dueDate": due_date,
-            "status": "paid",
-            "amount": commission,
-            "currency": currency,
-            "invoiceNumber": inv_no,
-        }
+        existing = q_one("SELECT id FROM invoices WHERE trade_id = %s AND auto_generated = true AND direction = 'incoming'", (trade_id,))
+        inv_fields = {"paymentDate": payment_date, "invoiceDate": payment_date, "dueDate": due_date,
+                      "status": "paid", "amount": commission, "currency": currency, "invoiceNumber": inv_no}
         if existing:
-            invoices_col.update_one({"_id": existing["_id"]}, {"$set": invoice_data})
+            update_document("invoices", existing["id"], set_fields=inv_fields)
         else:
-            invoices_col.insert_one({
-                **invoice_data,
-                "vendorName": trade.get("buyerName") or trade.get("buyerCode") or "",
-                "vendorCode": trade.get("buyerCode") or "",
-                "direction": "incoming",
-                "category": "Commission Payment",
-                "tradeId": trade_id,
+            insert_document("invoices", {
+                **inv_fields,
+                "vendorName": t.get("buyerName") or t.get("buyerCode") or "",
+                "vendorCode": t.get("buyerCode") or "",
+                "direction": "incoming", "category": "Commission Payment", "tradeId": trade_id,
                 "autoGenerated": True,
-                "description": f"Commission for {trade.get('BAContractNumber') or trade.get('referenceNumber') or trade_id}",
-                "createdAt": datetime.utcnow(),
-            })
-        create_notification("trade", f"Buyer payment received for {trade.get('BAContractNumber', '')}", trade_id, user.get("username"))
+                "description": f"Commission for {t.get('BAContractNumber') or t.get('referenceNumber') or trade_id}"})
+        create_notification("trade", f"Buyer payment received for {t.get('BAContractNumber', '')}", trade_id, user.get("username"))
     else:
-        trades_col.update_one(
-            {"_id": ObjectId(trade_id)},
-            {"$set": {
-                "buyerPaymentDate": "",
-                "invoiceDate": "",
-                "status": "ongoing",
-                "invoicePaid": False,
-            }}
-        )
-        invoices_col.delete_many({"tradeId": trade_id, "autoGenerated": True, "direction": "incoming"})
+        update_document("trades", trade_id, set_fields={
+            "buyerPaymentDate": "", "invoiceDate": "", "status": "ongoing", "invoicePaid": False})
+        execute("DELETE FROM invoices WHERE trade_id = %s AND auto_generated = true AND direction = 'incoming'", (trade_id,))
 
-    updated = trades_col.find_one({"_id": ObjectId(trade_id)})
-    return serialize_doc(updated)
+    return serialize_doc_row(q_one("SELECT * FROM trades WHERE id = %s", (trade_id,)))

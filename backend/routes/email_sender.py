@@ -5,15 +5,21 @@ import resend
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
-from bson import ObjectId
 from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
 
-from database import trades_col, partners_col, documents_col, db, vessels_col
+from database import q_one, q_all, update_document, serialize_doc_row
 from auth import get_current_user
 from config import UPLOAD_DIR
+
+
+def _get(table, _id):
+    if not _id:
+        return None
+    row = q_one(f'SELECT * FROM "{table}" WHERE id = %s', (_id,))
+    return serialize_doc_row(row) if row else None
 
 CERT_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "vessel_certs")
 
@@ -23,8 +29,7 @@ resend.api_key = os.environ.get("RESEND_API_KEY", "")
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "DealSpot - Execution <noreply@baticaret.com>")
 def get_cc_emails():
     """Load CC emails from admin users in the database."""
-    from database import db
-    users = db.users.find({"role": {"$in": ["admin", "accountant"]}})
+    users = q_all("SELECT email FROM users WHERE role IN ('admin', 'accountant')")
     return [u["email"] for u in users if u.get("email")]
 
 LOGO_PATH = os.path.join(os.path.dirname(__file__), "..", "dealspot-logo-transparent-sm.png")
@@ -92,7 +97,7 @@ def get_partner_email(partner_id):
     if not partner_id:
         return ""
     try:
-        partner = partners_col.find_one({"_id": ObjectId(partner_id)})
+        partner = _get("partners", partner_id)
         if partner:
             email = partner.get("email") or ""
             if email:
@@ -112,7 +117,7 @@ def get_partner_all_emails(partner_id):
     if not partner_id:
         return emails
     try:
-        partner = partners_col.find_one({"_id": ObjectId(partner_id)})
+        partner = _get("partners", partner_id)
         if not partner:
             return emails
         if partner.get("email"):
@@ -131,13 +136,11 @@ def get_bl_documents(trade_id):
     attachments = []
     try:
         # Find documents with docName containing "Bill of Lading" (case insensitive)
-        import re
-        bl_docs = documents_col.find({
-            "tradeId": trade_id,
-            "docName": re.compile(r"bill.*lading", re.IGNORECASE)
-        })
-        
-        for doc in bl_docs:
+        bl_docs = q_all("SELECT data FROM documents WHERE trade_id = %s AND doc_name ~* %s",
+                        (trade_id, r"bill.*lading"))
+
+        for row in bl_docs:
+            doc = row.get("data") or {}
             saved_name = doc.get("savedName", "")
             file_name = doc.get("fileName", saved_name)
             file_path = os.path.join(UPLOAD_DIR, saved_name)
@@ -176,7 +179,7 @@ def get_vessel_certificates(vessel_name):
     if not vessel_name:
         return attachments
     try:
-        vessel = vessels_col.find_one({"name": vessel_name})
+        vessel = serialize_doc_row(q_one("SELECT * FROM vessels WHERE name = %s", (vessel_name,)))
         if not vessel:
             return attachments
         for cert in vessel.get("certificates", []):
@@ -285,7 +288,7 @@ def build_email_body(trade, doc_name, recipient_name, recipient_role):
         buyer_doc = None
         if trade.get("buyerId"):
             try:
-                buyer_doc = partners_col.find_one({"_id": ObjectId(trade["buyerId"])})
+                buyer_doc = _get("partners", trade["buyerId"])
             except:
                 pass
         buyer_addr_parts = []
@@ -369,11 +372,11 @@ def build_email_body(trade, doc_name, recipient_name, recipient_role):
         vessel_doc = None
         if trade.get("vesselId"):
             try:
-                vessel_doc = db.vessels.find_one({"_id": ObjectId(trade["vesselId"])})
+                vessel_doc = _get("vessels", trade["vesselId"])
             except:
                 pass
         if not vessel_doc and trade.get("vesselName"):
-            vessel_doc = db.vessels.find_one({"name": trade["vesselName"]})
+            vessel_doc = serialize_doc_row(q_one("SELECT * FROM vessels WHERE name = %s", (trade["vesselName"],)))
         vessel_imo = (vessel_doc or {}).get("imoNumber") or trade.get("vesselIMO") or "-"
         vessel_flag = (vessel_doc or {}).get("flag") or trade.get("vesselFlag") or "-"
         vessel_built = (vessel_doc or {}).get("builtYear") or trade.get("vesselBuilt") or "-"
@@ -385,10 +388,11 @@ def build_email_body(trade, doc_name, recipient_name, recipient_role):
         lpa_name = trade.get("loadportAgent") or ""
         lpa_details = "-"
         if lpa_name:
-            lpa_doc = db.loadport_agents.find_one({"name": lpa_name})
+            lpa_doc = serialize_doc_row(q_one("SELECT * FROM loadport_agents WHERE name = %s", (lpa_name,)))
             if not lpa_doc:
                 import re
-                lpa_doc = db.loadport_agents.find_one({"name": re.compile(f"^{re.escape(lpa_name)}", re.IGNORECASE)})
+                lpa_doc = serialize_doc_row(q_one("SELECT * FROM loadport_agents WHERE name ~* %s",
+                                                  ("^" + re.escape(lpa_name),)))
             if lpa_doc:
                 parts = [f"<strong>{lpa_doc.get('name', '')}</strong>"]
                 if lpa_doc.get('contact'): parts.append(f"Contact: {lpa_doc['contact']}")
@@ -443,7 +447,7 @@ def build_email_body(trade, doc_name, recipient_name, recipient_role):
 @router.get("/email-prefill/{trade_id}")
 def get_email_prefill(trade_id: str, user=Depends(get_current_user)):
     """Get pre-filled email addresses for a trade."""
-    trade = trades_col.find_one({"_id": ObjectId(trade_id)})
+    trade = _get("trades", trade_id)
     if not trade:
         raise HTTPException(status_code=404, detail="Trade not found")
     seller_emails = get_partner_all_emails(trade.get("sellerId"))
@@ -460,7 +464,7 @@ def get_email_prefill(trade_id: str, user=Depends(get_current_user)):
 
 @router.post("/send-document-email")
 async def send_document_email(req: EmailSendRequest, user=Depends(get_current_user)):
-    trade = trades_col.find_one({"_id": ObjectId(req.trade_id)})
+    trade = _get("trades", req.trade_id)
     if not trade:
         raise HTTPException(status_code=404, detail="Trade not found")
 
@@ -611,15 +615,12 @@ async def send_document_email(req: EmailSendRequest, user=Depends(get_current_us
 
     # Track sent status
     sent_field = f"{req.doc_type}Sent"
-    trades_col.update_one(
-        {"_id": ObjectId(req.trade_id)},
-        {"$set": {
-            sent_field: True,
-            f"{sent_field}At": datetime.utcnow().isoformat() + "Z",
-            f"{sent_field}By": user.get("username") or user.get("name") or "",
-            f"{sent_field}SentTo": sent_to,
-        }}
-    )
+    update_document("trades", req.trade_id, set_fields={
+        sent_field: True,
+        f"{sent_field}At": datetime.utcnow().isoformat() + "Z",
+        f"{sent_field}By": user.get("username") or user.get("name") or "",
+        f"{sent_field}SentTo": sent_to,
+    })
 
     if errors and not sent_to:
         raise HTTPException(status_code=500, detail=f"Failed to send: {'; '.join(errors)}")

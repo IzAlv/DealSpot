@@ -1,63 +1,57 @@
-from datetime import datetime
-from typing import Optional
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Depends
-from bson import ObjectId
 
-from database import partners_col, serialize_doc, create_notification
+from database import (q_all, q_one, insert_document, update_document, delete_document,
+                      serialize_doc_row, create_notification)
 from auth import require_roles
 from models import PartnerCreate, PartnerNoteCreate, PartnerPromoteRequest
 
-from pymongo import collation as pymongo_collation
-
 non_accountant = require_roles("admin", "user")
-turkish_collation = pymongo_collation.Collation("tr")
 
 router = APIRouter(prefix="/api/partners", tags=["partners"])
 
 
 @router.get("")
-def list_partners(type: Optional[str] = None, search: Optional[str] = None, user=Depends(non_accountant)):
-    query = {}
+def list_partners(type: str = None, search: str = None, user=Depends(non_accountant)):
+    where, params = [], []
     if type and type != "all":
-        query["type"] = type
+        # `type` is scalar string for some rows, array for others — match both shapes.
+        where.append("(type = to_jsonb(%s::text) OR type @> jsonb_build_array(%s::text))")
+        params += [type, type]
     if search:
-        query["$or"] = [
-            {"companyName": {"$regex": search, "$options": "i"}},
-            {"contactPerson": {"$regex": search, "$options": "i"}},
-            {"email": {"$regex": search, "$options": "i"}},
-            {"companyCode": {"$regex": search, "$options": "i"}},
-        ]
-    return [serialize_doc(p) for p in partners_col.find(query).sort("companyName", 1).collation(turkish_collation)]
+        like = f"%{search}%"
+        where.append("(company_name ILIKE %s OR contact_person ILIKE %s OR email ILIKE %s OR company_code ILIKE %s)")
+        params += [like, like, like, like]
+    sql = "SELECT * FROM partners"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += ' ORDER BY company_name COLLATE "tr-TR-x-icu" ASC'
+    return [serialize_doc_row(p) for p in q_all(sql, params)]
 
 
 @router.post("")
 def create_partner(partner: PartnerCreate, user=Depends(non_accountant)):
-    data = partner.dict()
-    data["createdAt"] = datetime.utcnow()
-    data["updatedAt"] = datetime.utcnow()
-    result = partners_col.insert_one(data)
-    data["_id"] = result.inserted_id
-    create_notification("partner", f"New counterparty added: {data.get('companyName', '')}", str(result.inserted_id), user.get("username"))
-    return serialize_doc(data)
+    row = insert_document("partners", partner.dict())
+    create_notification("partner", f"New counterparty added: {partner.companyName}", str(row["id"]), user.get("username"))
+    return serialize_doc_row(row)
 
 
 @router.get("/{partner_id}")
 def get_partner(partner_id: str, user=Depends(non_accountant)):
-    partner = partners_col.find_one({"_id": ObjectId(partner_id)})
-    if not partner:
+    row = q_one("SELECT * FROM partners WHERE id = %s", (partner_id,))
+    if not row:
         raise HTTPException(status_code=404, detail="Partner not found")
-    return serialize_doc(partner)
+    return serialize_doc_row(row)
 
 
 @router.put("/{partner_id}")
 def update_partner(partner_id: str, partner: PartnerCreate, user=Depends(non_accountant)):
-    data = partner.dict()
-    data["updatedAt"] = datetime.utcnow()
-    partners_col.update_one({"_id": ObjectId(partner_id)}, {"$set": data})
-    updated = partners_col.find_one({"_id": ObjectId(partner_id)})
-    create_notification("partner", f"Counterparty updated: {updated.get('companyName', '')}", partner_id, user.get("username"))
-    return serialize_doc(updated)
+    row = update_document("partners", partner_id, set_fields=partner.dict())
+    if row is None:
+        raise HTTPException(status_code=404, detail="Partner not found")
+    create_notification("partner", f"Counterparty updated: {partner.companyName}", partner_id, user.get("username"))
+    return serialize_doc_row(row)
 
 
 @router.post("/{partner_id}/notes")
@@ -65,74 +59,49 @@ def add_partner_note(partner_id: str, note: PartnerNoteCreate, user=Depends(non_
     text = note.text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="Note text is required")
-
-    entry = {
-        "ts": datetime.utcnow().isoformat(),
+    existing = q_one("SELECT data FROM partners WHERE id = %s", (partner_id,))
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Partner not found")
+    timeline = (existing.get("data") or {}).get("notesTimeline", []) or []
+    timeline.append({
+        "ts": datetime.now(timezone.utc).isoformat(),
         "source": "manual",
         "author": user.get("displayName") or user.get("username") or "DealSpot",
         "text": text,
-    }
-    result = partners_col.update_one(
-        {"_id": ObjectId(partner_id)},
-        {"$push": {"notesTimeline": entry}, "$set": {"updatedAt": datetime.utcnow()}},
-    )
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Partner not found")
-
-    updated = partners_col.find_one({"_id": ObjectId(partner_id)})
-    create_notification("partner", f"Note added: {updated.get('companyName', '')}", partner_id, user.get("username"))
-    return serialize_doc(updated)
+    })
+    row = update_document("partners", partner_id, set_fields={"notesTimeline": timeline})
+    create_notification("partner", f"Note added: {(row.get('data') or {}).get('companyName', '')}", partner_id, user.get("username"))
+    return serialize_doc_row(row)
 
 
 @router.post("/{partner_id}/promote")
 def promote_partner(partner_id: str, req: PartnerPromoteRequest, user=Depends(non_accountant)):
-    """Promote a 'network' partner to a trading counterparty.
-
-    Sets kind='trading' and type=[chosen]. Idempotent — re-promoting just
-    overwrites the type. Records the change as a manual entry on the
-    notesTimeline so the lifecycle is visible in the detail view.
-    """
     valid_types = ("seller", "buyer", "co-broker")
     if req.type not in valid_types:
         raise HTTPException(status_code=400, detail=f"type must be one of: {', '.join(valid_types)}")
-
-    partner = partners_col.find_one({"_id": ObjectId(partner_id)})
-    if not partner:
+    existing = q_one("SELECT data FROM partners WHERE id = %s", (partner_id,))
+    if existing is None:
         raise HTTPException(status_code=404, detail="Partner not found")
-
-    prev_kind = partner.get("kind") or "trading"
-    author = user.get("displayName") or user.get("username") or "DealSpot"
-    timeline_entry = {
-        "ts": datetime.utcnow().isoformat(),
+    data = existing.get("data") or {}
+    prev_kind = data.get("kind") or "trading"
+    timeline = data.get("notesTimeline", []) or []
+    timeline.append({
+        "ts": datetime.now(timezone.utc).isoformat(),
         "source": "manual",
-        "author": author,
+        "author": user.get("displayName") or user.get("username") or "DealSpot",
         "text": f"Promoted from {prev_kind} to trading/{req.type}",
-    }
-    partners_col.update_one(
-        {"_id": ObjectId(partner_id)},
-        {
-            "$set": {
-                "kind": "trading",
-                "type": [req.type],
-                "updatedAt": datetime.utcnow(),
-            },
-            "$push": {"notesTimeline": timeline_entry},
-        },
-    )
-
-    updated = partners_col.find_one({"_id": ObjectId(partner_id)})
-    create_notification(
-        "partner",
-        f"Promoted to {req.type}: {updated.get('companyName', '')}",
-        partner_id,
-        user.get("username"),
-    )
-    return serialize_doc(updated)
+    })
+    row = update_document("partners", partner_id,
+                          set_fields={"kind": "trading", "type": [req.type], "notesTimeline": timeline})
+    create_notification("partner", f"Promoted to {req.type}: {(row.get('data') or {}).get('companyName', '')}",
+                        partner_id, user.get("username"))
+    return serialize_doc_row(row)
 
 
 @router.delete("/{partner_id}")
 def delete_partner(partner_id: str, user=Depends(non_accountant)):
-    p = partners_col.find_one({"_id": ObjectId(partner_id)})
-    partners_col.delete_one({"_id": ObjectId(partner_id)})
-    create_notification("partner", f"Counterparty deleted: {p.get('companyName', '') if p else partner_id}", partner_id, user.get("username"))
+    existing = q_one("SELECT data FROM partners WHERE id = %s", (partner_id,))
+    name = (existing.get("data") or {}).get("companyName", "") if existing else partner_id
+    delete_document("partners", partner_id)
+    create_notification("partner", f"Counterparty deleted: {name}", partner_id, user.get("username"))
     return {"message": "Partner deleted"}

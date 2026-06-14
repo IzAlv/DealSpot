@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from bson import ObjectId
 from io import BytesIO
 from datetime import datetime
 from reportlab.lib import colors
@@ -14,8 +13,15 @@ from reportlab.pdfbase.ttfonts import TTFont
 import os
 import re
 
-from database import trades_col, partners_col, commodities_col
+from database import q_one, serialize_doc_row
 from auth import get_current_user
+
+
+def _get(table, _id):
+    if not _id:
+        return None
+    row = q_one(f'SELECT * FROM "{table}" WHERE id = %s', (_id,))
+    return serialize_doc_row(row) if row else None
 
 # Register Liberation Sans fonts (free Arial equivalent, supports Turkish characters)
 _FONTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'fonts')
@@ -100,9 +106,9 @@ def partner_text(partner):
 
 def generate_bc_pdf(trade):
     """Generate Business Confirmation PDF and return BytesIO buffer."""
-    seller = partners_col.find_one({"_id": ObjectId(trade["sellerId"])}) if trade.get("sellerId") else None
-    buyer = partners_col.find_one({"_id": ObjectId(trade["buyerId"])}) if trade.get("buyerId") else None
-    broker = partners_col.find_one({"_id": ObjectId(trade["brokerId"])}) if trade.get("brokerId") else None
+    seller = _get("partners", trade.get("sellerId"))
+    buyer = _get("partners", trade.get("buyerId"))
+    broker = _get("partners", trade.get("brokerId"))
 
     contract_date = fmt_date_slash(trade.get("contractDate"))
     contract_no = trade.get("sellerContractNumber") or trade.get("BAContractNumber") or trade.get("contractNumber") or trade.get("referenceNumber") or "-"
@@ -119,7 +125,7 @@ def generate_bc_pdf(trade):
         commodity_id = trade.get("commodityId")
         if commodity_id:
             try:
-                comm = commodities_col.find_one({"_id": ObjectId(commodity_id)})
+                comm = _get("commodities", commodity_id)
                 if comm:
                     quality = comm.get("specs", "")
             except Exception:
@@ -202,8 +208,7 @@ def generate_bc_pdf(trade):
         pv_country = pv.get("portCountry", "")
         if not pv_country and pv.get("portId"):
             try:
-                from database import ports_col as pc
-                pv_doc = pc.find_one({"_id": ObjectId(pv["portId"])})
+                pv_doc = _get("ports", pv["portId"])
                 if pv_doc:
                     pv_country = pv_doc.get("country", "")
             except Exception:
@@ -216,7 +221,7 @@ def generate_bc_pdf(trade):
     doc_list = []
     commodity_id = trade.get("commodityId")
     if commodity_id:
-        comm = commodities_col.find_one({"_id": ObjectId(commodity_id)})
+        comm = _get("commodities", commodity_id)
         if comm and comm.get("documents"):
             doc_list = comm["documents"]
     docs_text = "<br/>".join([f"- {d}" for d in doc_list]) if doc_list else "-"
@@ -308,7 +313,7 @@ def generate_bc_pdf(trade):
 
 @router.get("/{trade_id}/pdf")
 def generate_business_confirmation_pdf(trade_id: str, user=Depends(get_current_user)):
-    trade = trades_col.find_one({"_id": ObjectId(trade_id)})
+    trade = _get("trades", trade_id)
     if not trade:
         raise HTTPException(status_code=404, detail="Trade not found")
 

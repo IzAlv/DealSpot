@@ -1,68 +1,40 @@
-from datetime import datetime, timedelta
-import random
+"""Seed default data into an EMPTY PostgreSQL database (idempotent — only seeds empty tables).
 
-from database import (
-    users_col, trades_col, partners_col, vessels_col,
-    commodities_col, origins_col, ports_col, surveyors_col,
-    ensure_indexes,
-)
+Schema itself (backend/schema.sql) is applied as a deploy step, not here. This module only
+populates default rows so a fresh DB is usable. On a migrated DB every table is already
+populated, so each block is a no-op.
+"""
+from database import q_one, insert_document
 from auth import pwd_context
+
+
+def _count(table):
+    try:
+        return q_one(f'SELECT count(*) c FROM "{table}"')["c"]
+    except Exception:
+        return None  # table missing -> schema not applied yet
 
 
 def seed_data():
     try:
         _run_seed()
     except Exception as e:
-        print(f"WARNING: seed_data: MongoDB unreachable at startup, skipping ({e})", flush=True)
+        print(f"WARNING: seed_data skipped ({e})", flush=True)
 
 
 def _run_seed():
-    ensure_indexes()
-    partners_col.update_many({"kind": {"$exists": False}}, {"$set": {"kind": "trading"}})
-    if users_col.count_documents({}) == 0:
-        users_col.insert_many([
-            {
-                "username": "izzet.alev",
-                "password": pwd_context.hash("izzet123"),
-                "role": "admin",
-                "name": "Izzet Alev",
-                "email": "izzet.alev@gmail.com",
-                "status": "active",
-                "createdAt": datetime.utcnow()
-            },
-            {
-                "username": "piraccount",
-                "password": pwd_context.hash("piraccount123"),
-                "role": "accountant",
-                "name": "PIR Accountant",
-                "email": "izzet@baticaret.com",
-                "status": "active",
-                "createdAt": datetime.utcnow()
-            }
-        ])
-    else:
-        old_user = users_col.find_one({"username": "salihkaragoz"})
-        if old_user:
-            users_col.update_one(
-                {"_id": old_user["_id"]},
-                {"$set": {
-                    "username": "izzet.alev",
-                    "password": pwd_context.hash("izzet123"),
-                    "name": "Izzet Alev",
-                    "email": "izzet.alev@gmail.com",
-                }}
-            )
+    if _count("users") == 0:
+        insert_document("users", {
+            "username": "izzet.alev", "password": pwd_context.hash("izzet123"),
+            "role": "admin", "name": "Izzet Alev", "email": "izzet.alev@gmail.com", "status": "active",
+        })
+        insert_document("users", {
+            "username": "piraccount", "password": pwd_context.hash("piraccount123"),
+            "role": "accountant", "name": "PIR Accountant", "email": "izzet@baticaret.com", "status": "active",
+        })
 
-        # Migrate the legacy piraccount email if it's still the original PIR value.
-        # Scoped by old email so a manually-changed email isn't clobbered.
-        users_col.update_one(
-            {"username": "piraccount", "email": "accounting@pirgrains.com"},
-            {"$set": {"email": "izzet@baticaret.com"}},
-        )
-
-    # Only seed if collections are empty — respect user changes from Settings
-    if commodities_col.count_documents({}) == 0:
-        comms = [
+    if _count("commodities") == 0:
+        for c in [
             {"name": "10.5 % Pro. Wheat", "code": "WH", "group": "Grains", "hsCode": "1001.99.00.00.11"},
             {"name": "11.5 % Pro. Wheat", "code": "WH", "group": "Grains", "hsCode": "1001.99.00.00.11"},
             {"name": "12.5 % Pro. Wheat", "code": "WH", "group": "Grains", "hsCode": "1001.99.00.00.11"},
@@ -83,13 +55,11 @@ def _run_seed():
             {"name": "Red Lentils", "code": "WRL", "group": "Pulses & Rice", "hsCode": "0713.40.00.00.13"},
             {"name": "White Rice", "code": "RICE", "group": "Pulses & Rice", "hsCode": "1006.30.27.00.00"},
             {"name": "Yellow Peas", "code": "PEAS", "group": "Pulses & Rice", "hsCode": "0713.10.10.00.00"},
-        ]
-        for c in comms:
-            c["createdAt"] = datetime.utcnow()
-            commodities_col.insert_one(c)
+        ]:
+            insert_document("commodities", c)
 
-    if origins_col.count_documents({}) == 0:
-        origins = [
+    if _count("origins") == 0:
+        for o in [
             {"name": "Russia", "adjective": "Russian", "code": "RUS"},
             {"name": "Ukraine", "adjective": "Ukrainian", "code": "UKR"},
             {"name": "Moldova", "adjective": "Moldovian", "code": "MOL"},
@@ -97,13 +67,11 @@ def _run_seed():
             {"name": "Italy", "adjective": "Italian", "code": "ITA"},
             {"name": "Bulgaria", "adjective": "Bulgarian", "code": "BUL"},
             {"name": "Any", "adjective": "Any", "code": "ANY"},
-        ]
-        for o in origins:
-            o["createdAt"] = datetime.utcnow()
-            origins_col.insert_one(o)
+        ]:
+            insert_document("origins", o)
 
-    if ports_col.count_documents({}) == 0:
-        ports = [
+    if _count("ports") == 0:
+        for p in [
             {"name": "Azov", "type": "loading", "country": "Russia", "countryCode": "RU"},
             {"name": "Bagaevskaya", "type": "loading", "country": "Russia", "countryCode": "RU"},
             {"name": "Chornomorsk", "type": "loading", "country": "Ukraine", "countryCode": "UA"},
@@ -138,39 +106,11 @@ def _run_seed():
             {"name": "Sfax", "type": "discharge", "country": "Tunisia", "countryCode": "TN"},
             {"name": "Tekirdag", "type": "discharge", "country": "Turkiye", "countryCode": "TR"},
             {"name": "Trabzon", "type": "discharge", "country": "Turkiye", "countryCode": "TR"},
-        ]
-        for p in ports:
-            p["createdAt"] = datetime.utcnow()
-            ports_col.insert_one(p)
+        ]:
+            insert_document("ports", p)
 
-    if partners_col.count_documents({}) == 0:
-        partners = [
-            {"companyName": "DealSpot Ltd", "companyCode": "DSP", "contactPerson": "Trade Contact", "email": "trading@dealspot.com", "phone": "+359 32 000 000", "city": "Plovdiv", "country": "Bulgaria", "type": "broker", "address": "Tsarigradsko Shose Blvd. No:73"},
-            {"companyName": "Atria Brokers FZCO", "companyCode": "ATRIA", "contactPerson": "Trade Desk", "email": "trading@atriabrokers.ae", "phone": "+971 4 000 0000", "city": "Dubai", "country": "UAE", "type": "broker", "address": "Dubai Silicon Oasis, DDP"},
-            {"companyName": "Nord Star LLC", "companyCode": "NORD", "contactPerson": "Trade Manager", "email": "trade@nordstar.ru", "phone": "+7 863 000 0000", "city": "Rostov-on-Don", "country": "Russia", "type": "broker", "address": "Vasnetsova 10A, Azov"},
-            {"companyName": "AgroTrade International", "companyCode": "AGRO", "contactPerson": "Ahmed Hassan", "email": "ahmed@agrotrade.com", "phone": "+971 4 000 0000", "city": "Dubai", "country": "UAE", "type": "buyer", "address": "Trade Center, Dubai"},
-            {"companyName": "Al Manar Trading", "companyCode": "ALM", "contactPerson": "Khalid Al Rashid", "email": "khalid@almanar.sa", "phone": "+966 1 000 0000", "city": "Jeddah", "country": "Saudi Arabia", "type": "buyer", "address": "King Fahd Rd"},
-            {"companyName": "Asia Pulses Corp", "companyCode": "APC", "contactPerson": "Rajesh Kumar", "email": "rajesh@asiapulses.in", "phone": "+91 22 000 0000", "city": "Mumbai", "country": "India", "type": "buyer", "address": "Nariman Point"},
-            {"companyName": "Black Sea Exports Ltd", "companyCode": "BSE", "contactPerson": "Ivan Petrov", "email": "ivan@bsexports.com", "phone": "+7 863 000 0000", "city": "Rostov", "country": "Russia", "type": "seller", "address": "Port District"},
-            {"companyName": "Balkan Grains OOD", "companyCode": "BG", "contactPerson": "Georgi Dimitrov", "email": "georgi@balkangrains.bg", "phone": "+359 32 000 000", "city": "Plovdiv", "country": "Bulgaria", "type": "seller", "address": "Industrial Zone"},
-            {"companyName": "Anatolia Commodities", "companyCode": "ANA", "contactPerson": "Mehmet Yilmaz", "email": "mehmet@anatoliacm.tr", "phone": "+90 312 000 0000", "city": "Ankara", "country": "Turkey", "type": "seller", "address": "Trade Blvd"},
-            {"companyName": "Mediterranean Brokers", "companyCode": "MED", "contactPerson": "Marco Rossi", "email": "marco@medbrokers.it", "phone": "+39 02 000 0000", "city": "Milan", "country": "Italy", "type": "co-broker", "address": "Via Roma 12"},
-        ]
-        for p in partners:
-            p["createdAt"] = datetime.utcnow()
-            p["updatedAt"] = datetime.utcnow()
-            p["tradeContacts"] = [{"name": p["contactPerson"], "email": p["email"], "phone": p["phone"]}]
-            p["executionContacts"] = []
-            partners_col.insert_one(p)
-
-    if vessels_col.count_documents({}) == 0:
-        from vessel_data import VESSELS
-        for v in VESSELS:
-            v["createdAt"] = datetime.utcnow()
-            vessels_col.insert_one(v)
-
-    if surveyors_col.count_documents({}) == 0:
-        surveyors = [
+    if _count("surveyors") == 0:
+        for s in [
             {"name": "Baltic Control", "countriesServed": ["Russia"]},
             {"name": "Bureau Veritas", "countriesServed": ["Russia", "Turkey"]},
             {"name": "Control Union", "countriesServed": ["Turkey", "Ukraine", "Russia", "Romania", "Bulgaria"]},
@@ -185,7 +125,10 @@ def _run_seed():
             {"name": "Top Logistic", "countriesServed": ["Russia"]},
             {"name": "TopFrame", "countriesServed": ["Russia"]},
             {"name": "Viglienzone", "countriesServed": ["Italy"]},
-        ]
-        for s in surveyors:
-            s["createdAt"] = datetime.utcnow()
-            surveyors_col.insert_one(s)
+        ]:
+            insert_document("surveyors", s)
+
+    if _count("vessels") == 0:
+        from vessel_data import VESSELS
+        for v in VESSELS:
+            insert_document("vessels", v)

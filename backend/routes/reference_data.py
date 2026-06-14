@@ -1,12 +1,6 @@
-from datetime import datetime
-
 from fastapi import APIRouter, Depends
-from bson import ObjectId
 
-from database import (
-    commodities_col, origins_col, ports_col, surveyors_col,
-    disport_agents_col, loadport_agents_col, serialize_doc, create_notification
-)
+from database import q_all, q_one, insert_document, update_document, delete_document, serialize_doc_row, create_notification
 from auth import require_roles
 from models import CommodityCreate, OriginCreate, PortCreate, SurveyorCreate, DisportAgentCreate
 
@@ -15,188 +9,151 @@ non_accountant = require_roles("admin", "user")
 router = APIRouter(prefix="/api", tags=["reference_data"])
 
 
+def _list(table):
+    return [serialize_doc_row(r) for r in q_all(f'SELECT * FROM "{table}" ORDER BY name ASC')]
+
+
+def _create(table, data, label, user):
+    row = insert_document(table, data)
+    create_notification("settings", f"{label} added: {data.get('name', '')}", str(row["id"]), user.get("username"))
+    return serialize_doc_row(row)
+
+
+def _update(table, item_id, data, label, user):
+    row = update_document(table, item_id, set_fields=data)
+    create_notification("settings", f"{label} updated: {data.get('name', '')}", item_id, user.get("username"))
+    return serialize_doc_row(row)
+
+
+def _delete(table, item_id, label, user):
+    existing = q_one(f'SELECT data FROM "{table}" WHERE id = %s', (item_id,))
+    name = (existing.get("data") or {}).get("name", "") if existing else item_id
+    delete_document(table, item_id)
+    create_notification("settings", f"{label} deleted: {name}", item_id, user.get("username"))
+    return {"message": "Deleted"}
+
+
 # ─── Commodities ─────────────────────────────────────────────
 @router.get("/commodities")
 def list_commodities(user=Depends(non_accountant)):
-    return [serialize_doc(i) for i in commodities_col.find().sort("name", 1)]
+    return _list("commodities")
 
 
 @router.post("/commodities")
 def create_commodity(item: CommodityCreate, user=Depends(non_accountant)):
-    data = item.dict()
-    data["createdAt"] = datetime.utcnow()
-    result = commodities_col.insert_one(data)
-    data["_id"] = result.inserted_id
-    create_notification("settings", f"Commodity added: {data.get('name', '')}", str(result.inserted_id), user.get("username"))
-    return serialize_doc(data)
+    return _create("commodities", item.dict(), "Commodity", user)
 
 
 @router.put("/commodities/{item_id}")
 def update_commodity(item_id: str, item: CommodityCreate, user=Depends(non_accountant)):
-    commodities_col.update_one({"_id": ObjectId(item_id)}, {"$set": item.dict()})
-    create_notification("settings", f"Commodity updated: {item.name}", item_id, user.get("username"))
-    return serialize_doc(commodities_col.find_one({"_id": ObjectId(item_id)}))
+    return _update("commodities", item_id, item.dict(), "Commodity", user)
 
 
 @router.delete("/commodities/{item_id}")
 def delete_commodity(item_id: str, user=Depends(non_accountant)):
-    c = commodities_col.find_one({"_id": ObjectId(item_id)})
-    commodities_col.delete_one({"_id": ObjectId(item_id)})
-    create_notification("settings", f"Commodity deleted: {c.get('name', '') if c else item_id}", item_id, user.get("username"))
-    return {"message": "Deleted"}
+    return _delete("commodities", item_id, "Commodity", user)
 
 
 # ─── Origins ─────────────────────────────────────────────────
 @router.get("/origins")
 def list_origins(user=Depends(non_accountant)):
-    return [serialize_doc(i) for i in origins_col.find().sort("name", 1)]
+    return _list("origins")
 
 
 @router.post("/origins")
 def create_origin(item: OriginCreate, user=Depends(non_accountant)):
-    data = item.dict()
-    data["createdAt"] = datetime.utcnow()
-    result = origins_col.insert_one(data)
-    data["_id"] = result.inserted_id
-    create_notification("settings", f"Origin added: {data.get('name', '')}", str(result.inserted_id), user.get("username"))
-    return serialize_doc(data)
+    return _create("origins", item.dict(), "Origin", user)
 
 
 @router.put("/origins/{item_id}")
 def update_origin(item_id: str, item: OriginCreate, user=Depends(non_accountant)):
-    origins_col.update_one({"_id": ObjectId(item_id)}, {"$set": item.dict()})
-    create_notification("settings", f"Origin updated: {item.name}", item_id, user.get("username"))
-    return serialize_doc(origins_col.find_one({"_id": ObjectId(item_id)}))
+    return _update("origins", item_id, item.dict(), "Origin", user)
 
 
 @router.delete("/origins/{item_id}")
 def delete_origin(item_id: str, user=Depends(non_accountant)):
-    o = origins_col.find_one({"_id": ObjectId(item_id)})
-    origins_col.delete_one({"_id": ObjectId(item_id)})
-    create_notification("settings", f"Origin deleted: {o.get('name', '') if o else item_id}", item_id, user.get("username"))
-    return {"message": "Deleted"}
+    return _delete("origins", item_id, "Origin", user)
 
 
 # ─── Ports ───────────────────────────────────────────────────
 @router.get("/ports")
 def list_ports(user=Depends(non_accountant)):
-    return [serialize_doc(i) for i in ports_col.find().sort("name", 1)]
+    return _list("ports")
 
 
 @router.post("/ports")
 def create_port(item: PortCreate, user=Depends(non_accountant)):
-    data = item.dict()
-    data["createdAt"] = datetime.utcnow()
-    result = ports_col.insert_one(data)
-    data["_id"] = result.inserted_id
-    create_notification("settings", f"Port added: {data.get('name', '')}", str(result.inserted_id), user.get("username"))
-    return serialize_doc(data)
+    return _create("ports", item.dict(), "Port", user)
 
 
 @router.put("/ports/{item_id}")
 def update_port(item_id: str, item: PortCreate, user=Depends(non_accountant)):
-    ports_col.update_one({"_id": ObjectId(item_id)}, {"$set": item.dict()})
-    create_notification("settings", f"Port updated: {item.name}", item_id, user.get("username"))
-    return serialize_doc(ports_col.find_one({"_id": ObjectId(item_id)}))
+    return _update("ports", item_id, item.dict(), "Port", user)
 
 
 @router.delete("/ports/{item_id}")
 def delete_port(item_id: str, user=Depends(non_accountant)):
-    p = ports_col.find_one({"_id": ObjectId(item_id)})
-    ports_col.delete_one({"_id": ObjectId(item_id)})
-    create_notification("settings", f"Port deleted: {p.get('name', '') if p else item_id}", item_id, user.get("username"))
-    return {"message": "Deleted"}
+    return _delete("ports", item_id, "Port", user)
 
 
 # ─── Surveyors ───────────────────────────────────────────────
 @router.get("/surveyors")
 def list_surveyors(user=Depends(non_accountant)):
-    return [serialize_doc(i) for i in surveyors_col.find().sort("name", 1)]
+    return _list("surveyors")
 
 
 @router.post("/surveyors")
 def create_surveyor(item: SurveyorCreate, user=Depends(non_accountant)):
-    data = item.dict()
-    data["createdAt"] = datetime.utcnow()
-    result = surveyors_col.insert_one(data)
-    data["_id"] = result.inserted_id
-    create_notification("settings", f"Surveyor added: {data.get('name', '')}", str(result.inserted_id), user.get("username"))
-    return serialize_doc(data)
+    return _create("surveyors", item.dict(), "Surveyor", user)
 
 
 @router.put("/surveyors/{item_id}")
 def update_surveyor(item_id: str, item: SurveyorCreate, user=Depends(non_accountant)):
-    surveyors_col.update_one({"_id": ObjectId(item_id)}, {"$set": item.dict()})
-    create_notification("settings", f"Surveyor updated: {item.name}", item_id, user.get("username"))
-    return serialize_doc(surveyors_col.find_one({"_id": ObjectId(item_id)}))
+    return _update("surveyors", item_id, item.dict(), "Surveyor", user)
 
 
 @router.delete("/surveyors/{item_id}")
 def delete_surveyor(item_id: str, user=Depends(non_accountant)):
-    s = surveyors_col.find_one({"_id": ObjectId(item_id)})
-    surveyors_col.delete_one({"_id": ObjectId(item_id)})
-    create_notification("settings", f"Surveyor deleted: {s.get('name', '') if s else item_id}", item_id, user.get("username"))
-    return {"message": "Deleted"}
-
+    return _delete("surveyors", item_id, "Surveyor", user)
 
 
 # ─── Load Port Agents ─────────────────────────────────────────
 @router.get("/loadport-agents")
 def list_loadport_agents(user=Depends(non_accountant)):
-    return [serialize_doc(i) for i in loadport_agents_col.find().sort("name", 1)]
+    return _list("loadport_agents")
 
 
 @router.post("/loadport-agents")
 def create_loadport_agent(item: DisportAgentCreate, user=Depends(non_accountant)):
-    data = item.dict()
-    data["createdAt"] = datetime.utcnow()
-    result = loadport_agents_col.insert_one(data)
-    data["_id"] = result.inserted_id
-    create_notification("settings", f"Load Port Agent added: {data.get('name', '')}", str(result.inserted_id), user.get("username"))
-    return serialize_doc(data)
+    return _create("loadport_agents", item.dict(), "Load Port Agent", user)
 
 
 @router.put("/loadport-agents/{item_id}")
 def update_loadport_agent(item_id: str, item: DisportAgentCreate, user=Depends(non_accountant)):
-    loadport_agents_col.update_one({"_id": ObjectId(item_id)}, {"$set": item.dict()})
-    create_notification("settings", f"Load Port Agent updated: {item.name}", item_id, user.get("username"))
-    return serialize_doc(loadport_agents_col.find_one({"_id": ObjectId(item_id)}))
+    return _update("loadport_agents", item_id, item.dict(), "Load Port Agent", user)
 
 
 @router.delete("/loadport-agents/{item_id}")
 def delete_loadport_agent(item_id: str, user=Depends(non_accountant)):
-    a = loadport_agents_col.find_one({"_id": ObjectId(item_id)})
-    loadport_agents_col.delete_one({"_id": ObjectId(item_id)})
-    create_notification("settings", f"Load Port Agent deleted: {a.get('name', '') if a else item_id}", item_id, user.get("username"))
-    return {"message": "Deleted"}
+    return _delete("loadport_agents", item_id, "Load Port Agent", user)
 
 
 # ─── Disport Agents ──────────────────────────────────────────
 @router.get("/disport-agents")
 def list_disport_agents(user=Depends(non_accountant)):
-    return [serialize_doc(i) for i in disport_agents_col.find().sort("name", 1)]
+    return _list("disport_agents")
 
 
 @router.post("/disport-agents")
 def create_disport_agent(item: DisportAgentCreate, user=Depends(non_accountant)):
-    data = item.dict()
-    data["createdAt"] = datetime.utcnow()
-    result = disport_agents_col.insert_one(data)
-    data["_id"] = result.inserted_id
-    create_notification("settings", f"Disport Agent added: {data.get('name', '')}", str(result.inserted_id), user.get("username"))
-    return serialize_doc(data)
+    return _create("disport_agents", item.dict(), "Disport Agent", user)
 
 
 @router.put("/disport-agents/{item_id}")
 def update_disport_agent(item_id: str, item: DisportAgentCreate, user=Depends(non_accountant)):
-    disport_agents_col.update_one({"_id": ObjectId(item_id)}, {"$set": item.dict()})
-    create_notification("settings", f"Disport Agent updated: {item.name}", item_id, user.get("username"))
-    return serialize_doc(disport_agents_col.find_one({"_id": ObjectId(item_id)}))
+    return _update("disport_agents", item_id, item.dict(), "Disport Agent", user)
 
 
 @router.delete("/disport-agents/{item_id}")
 def delete_disport_agent(item_id: str, user=Depends(non_accountant)):
-    a = disport_agents_col.find_one({"_id": ObjectId(item_id)})
-    disport_agents_col.delete_one({"_id": ObjectId(item_id)})
-    create_notification("settings", f"Disport Agent deleted: {a.get('name', '') if a else item_id}", item_id, user.get("username"))
-    return {"message": "Deleted"}
+    return _delete("disport_agents", item_id, "Disport Agent", user)

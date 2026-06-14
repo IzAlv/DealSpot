@@ -83,17 +83,17 @@ def health():
 @app.get("/api/config/active-url")
 def get_active_url():
     """Public endpoint - returns the current active app URL"""
-    from database import app_config_col
-    config = app_config_col.find_one({"key": "active_url"}, {"_id": 0})
-    if config:
-        return {"activeUrl": config.get("value", "")}
+    from database import q_one, execute
+    row = q_one("SELECT value FROM app_config WHERE key = 'active_url'")
+    if row:
+        return {"activeUrl": row.get("value") or ""}
     # If no active URL set yet, auto-initialize from APP_URL env
     app_url = os.environ.get("APP_URL", "").rstrip("/")
     if app_url:
-        app_config_col.update_one(
-            {"key": "active_url"},
-            {"$set": {"key": "active_url", "value": app_url}},
-            upsert=True
+        execute(
+            "INSERT INTO app_config (key, value) VALUES ('active_url', %s) "
+            "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+            (app_url,),
         )
     return {"activeUrl": app_url}
 
@@ -101,14 +101,13 @@ def get_active_url():
 @app.put("/api/config/active-url")
 def update_active_url(body: dict):
     """Admin endpoint - updates the active app URL"""
-    from database import app_config_col
-    from auth import get_current_user
+    from database import execute
     new_url = body.get("activeUrl", "").rstrip("/")
     if not new_url:
         return {"error": "activeUrl is required"}
-    app_config_col.update_one(
-        {"key": "active_url"},
-        {"$set": {"key": "active_url", "value": new_url}},
-        upsert=True
+    execute(
+        "INSERT INTO app_config (key, value) VALUES ('active_url', %s) "
+        "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+        (new_url,),
     )
     return {"activeUrl": new_url}

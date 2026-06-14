@@ -15,14 +15,25 @@ from typing import Optional, List
 from bs4 import BeautifulSoup
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from bson import ObjectId
 
-from database import (
-    market_prices_col, market_notes_col, tmo_tenders_col,
-    telegram_channels_col, market_commodities_col, turkish_exchange_prices_col,
-    serialize_doc
-)
+from database import (q_one, q_all, execute, insert_document, update_document,
+                      delete_document, serialize_doc_row)
+from psycopg.types.json import Jsonb
 from auth import get_current_user, require_roles
+
+
+def _latest_price(symbol):
+    row = q_one("SELECT * FROM market_prices WHERE symbol = %s ORDER BY timestamp DESC NULLS LAST LIMIT 1", (symbol,))
+    return serialize_doc_row(row) if row else None
+
+
+def _upsert_price(doc):
+    data = {k: v for k, v in doc.items() if k != "_id"}
+    execute(
+        "INSERT INTO market_prices (symbol, timestamp, price, data) VALUES (%s, %s, %s, %s) "
+        "ON CONFLICT (symbol) DO UPDATE SET timestamp = EXCLUDED.timestamp, price = EXCLUDED.price, data = EXCLUDED.data",
+        (doc.get("symbol"), doc.get("timestamp"), doc.get("price"), Jsonb(data)),
+    )
 
 router = APIRouter(prefix="/api/market", tags=["market"])
 
@@ -257,18 +268,14 @@ async def fetch_commodity_price(symbol: str):
         barchart_data = await scrape_barchart_commodity(symbol)
         if barchart_data:
             # Cache the price
-            market_prices_col.update_one(
-                {"symbol": symbol},
-                {"$set": {
-                    "symbol": symbol, 
-                    "price": barchart_data["price"], 
-                    "change": barchart_data["change"], 
-                    "changePercent": barchart_data["changePercent"], 
-                    "source": "Barchart",
-                    "timestamp": datetime.now(timezone.utc).isoformat()
-                }},
-                upsert=True
-            )
+            _upsert_price({
+                "symbol": symbol,
+                "price": barchart_data["price"],
+                "change": barchart_data["change"],
+                "changePercent": barchart_data["changePercent"],
+                "source": "Barchart",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
             return {
                 "symbol": symbol,
                 "price": round(barchart_data["price"], 2),
@@ -285,18 +292,14 @@ async def fetch_commodity_price(symbol: str):
         barchart_data = await scrape_barchart_forex(symbol)
         if barchart_data:
             # Cache the price
-            market_prices_col.update_one(
-                {"symbol": symbol},
-                {"$set": {
-                    "symbol": symbol, 
-                    "price": barchart_data["price"], 
-                    "change": barchart_data["change"], 
-                    "changePercent": barchart_data["changePercent"], 
-                    "source": "Barchart",
-                    "timestamp": datetime.now(timezone.utc).isoformat()
-                }},
-                upsert=True
-            )
+            _upsert_price({
+                "symbol": symbol,
+                "price": barchart_data["price"],
+                "change": barchart_data["change"],
+                "changePercent": barchart_data["changePercent"],
+                "source": "Barchart",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
             return {
                 "symbol": symbol,
                 "price": round(barchart_data["price"], 5),
@@ -323,17 +326,14 @@ async def fetch_commodity_price(symbol: str):
                     rate = 1 / rate if rate else 0
                 
                 # Get cached price for change calculation
-                cached = market_prices_col.find_one({"symbol": symbol}, sort=[("timestamp", -1)])
+                cached = _latest_price(symbol)
                 old_price = cached.get("price", rate) if cached else rate
                 change = rate - old_price
                 change_pct = (change / old_price * 100) if old_price else 0
                 
                 # Cache the new price
-                market_prices_col.update_one(
-                    {"symbol": symbol},
-                    {"$set": {"symbol": symbol, "price": rate, "change": change, "changePercent": change_pct, "timestamp": datetime.now(timezone.utc).isoformat()}},
-                    upsert=True
-                )
+                _upsert_price({"symbol": symbol, "price": rate, "change": change,
+                               "changePercent": change_pct, "timestamp": datetime.now(timezone.utc).isoformat()})
                 
                 return {
                     "symbol": symbol,
@@ -370,9 +370,9 @@ async def fetch_commodity_price(symbol: str):
         }
     
     # Return cached or mock data if API fails
-    cached = market_prices_col.find_one({"symbol": symbol}, sort=[("timestamp", -1)])
+    cached = _latest_price(symbol)
     if cached:
-        return serialize_doc(cached)
+        return cached
     
     # Generate realistic mock data
     mock_prices = {
@@ -413,8 +413,9 @@ async def get_market_prices(user=Depends(get_current_user)):
     # First, return DB-cached prices instantly if available, then refresh in background
     db_prices = []
     for commodity in DEFAULT_COMMODITIES:
-        cached = market_prices_col.find_one({"symbol": commodity["symbol"]}, {"_id": 0})
+        cached = _latest_price(commodity["symbol"])
         if cached:
+            cached.pop("id", None)
             cached["name"] = commodity["name"]
             cached["type"] = commodity["type"]
             cached["unit"] = commodity["unit"]
@@ -667,13 +668,18 @@ async def get_turkish_exchange_prices(
     user=Depends(get_current_user)
 ):
     """Get prices from Turkish commodity exchanges (KTB, GTB), optionally filtered by exchange and date"""
-    query = {}
+    where, params = [], []
     if exchange:
-        query["exchange"] = exchange
+        where.append("exchange = %s")
+        params.append(exchange)
     if date:
-        query["date"] = date
-    prices = list(turkish_exchange_prices_col.find(query).sort("date", -1).limit(100))
-    return [serialize_doc(p) for p in prices]
+        where.append("date = %s")
+        params.append(date)
+    sql = "SELECT * FROM turkish_exchange_prices"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY date DESC LIMIT 100"
+    return [serialize_doc_row(p) for p in q_all(sql, params)]
 
 
 @router.get("/turkish-exchanges/dates")
@@ -682,23 +688,16 @@ async def get_turkish_exchange_dates(
     user=Depends(get_current_user)
 ):
     """Get list of dates that have exchange price data, grouped by exchange"""
-    pipeline = []
+    from collections import defaultdict
+    where, params = "", []
     if exchange:
-        pipeline.append({"$match": {"exchange": exchange}})
-    pipeline.extend([
-        {"$group": {"_id": {"exchange": "$exchange", "date": "$date"}}},
-        {"$sort": {"_id.date": -1}},
-        {"$group": {
-            "_id": "$_id.exchange",
-            "dates": {"$push": "$_id.date"}
-        }}
-    ])
-    result = list(turkish_exchange_prices_col.aggregate(pipeline))
-    # Return as { "KTB": ["25.03.2026", "24.03.2026", ...], "GTB": [...] }
-    dates_by_exchange = {}
-    for item in result:
-        dates_by_exchange[item["_id"]] = item["dates"]
-    return dates_by_exchange
+        where, params = "WHERE exchange = %s", [exchange]
+    rows = q_all(f"SELECT exchange, date FROM turkish_exchange_prices {where} GROUP BY exchange, date", params)
+    # Return as { "KTB": ["25.03.2026", "24.03.2026", ...], "GTB": [...] } (date string desc)
+    dates_by_exchange = defaultdict(list)
+    for r in rows:
+        dates_by_exchange[r["exchange"]].append(r["date"])
+    return {ex: sorted(dates, reverse=True) for ex, dates in dates_by_exchange.items()}
 
 
 @router.get("/turkish-exchanges/monthly")
@@ -715,42 +714,36 @@ async def get_turkish_exchange_monthly(
     # Match dates like "01.03.2026" to "31.03.2026"
     date_pattern = f"^\\d{{2}}\\.{month_str}\\.{year_str}$"
     
-    pipeline = [
-        {"$match": {
-            "exchange": exchange,
-            "date": {"$regex": date_pattern}
-        }},
-        {"$group": {
-            "_id": "$product",
-            "avgPrice": {"$avg": "$avgPrice"},
-            "minPrice": {"$min": "$minPrice"},
-            "maxPrice": {"$max": "$maxPrice"},
-            "dataPoints": {"$sum": 1},
-            "dates": {"$addToSet": "$date"},
-            "productEn": {"$first": "$productEn"},
-            "unit": {"$first": "$unit"}
-        }},
-        {"$sort": {"_id": 1}}
-    ]
-    
-    results = list(turkish_exchange_prices_col.aggregate(pipeline))
+    results = q_all(
+        "SELECT product, "
+        "avg((data->>'avgPrice')::float) avg_price, "
+        "min((data->>'minPrice')::float) min_price, "
+        "max((data->>'maxPrice')::float) max_price, "
+        "count(*) data_points, "
+        "array_agg(DISTINCT date) dates, "
+        "(array_agg(data->>'productEn'))[1] product_en, "
+        "(array_agg(unit))[1] unit "
+        "FROM turkish_exchange_prices WHERE exchange = %s AND date ~ %s "
+        "GROUP BY product ORDER BY product ASC",
+        (exchange, date_pattern),
+    )
     months_map = {1: "January", 2: "February", 3: "March", 4: "April", 5: "May", 6: "June",
                   7: "July", 8: "August", 9: "September", 10: "October", 11: "November", 12: "December"}
-    
+
     return {
         "exchange": exchange,
         "year": year,
         "month": month,
         "monthName": months_map.get(month, ""),
         "products": [{
-            "product": r["_id"],
-            "productEn": r.get("productEn", r["_id"]),
-            "avgPrice": round(r["avgPrice"], 4) if r["avgPrice"] else None,
-            "minPrice": round(r["minPrice"], 4) if r["minPrice"] else None,
-            "maxPrice": round(r["maxPrice"], 4) if r["maxPrice"] else None,
-            "unit": r.get("unit", "TRY/KG"),
-            "dataPoints": r["dataPoints"],
-            "dates": sorted(r.get("dates", []))
+            "product": r["product"],
+            "productEn": r["product_en"] or r["product"],
+            "avgPrice": round(r["avg_price"], 4) if r["avg_price"] else None,
+            "minPrice": round(r["min_price"], 4) if r["min_price"] else None,
+            "maxPrice": round(r["max_price"], 4) if r["max_price"] else None,
+            "unit": r["unit"] or "TRY/KG",
+            "dataPoints": r["data_points"],
+            "dates": sorted(r["dates"] or [])
         } for r in results]
     }
 
@@ -766,21 +759,17 @@ async def scrape_turkish_exchanges(user=Depends(get_current_user)):
     today = datetime.now().strftime("%d.%m.%Y")
     
     if ktb_prices:
-        turkish_exchange_prices_col.delete_many({"exchange": "KTB", "date": today, "source": {"$regex": "ktb.org.tr"}})
+        execute("DELETE FROM turkish_exchange_prices WHERE exchange='KTB' AND date=%s AND data->>'source' ~ %s",
+                (today, "ktb.org.tr"))
         for price in ktb_prices:
-            doc = {**price}
-            doc["createdAt"] = datetime.now(timezone.utc).isoformat()
-            doc["createdBy"] = "system"
-            turkish_exchange_prices_col.insert_one(doc)
+            insert_document("turkish_exchange_prices", {**price, "createdBy": "system"})
             stored_count += 1
-    
+
     if gtb_prices:
-        turkish_exchange_prices_col.delete_many({"exchange": "GTB", "date": today, "source": {"$regex": "gtb.org.tr"}})
+        execute("DELETE FROM turkish_exchange_prices WHERE exchange='GTB' AND date=%s AND data->>'source' ~ %s",
+                (today, "gtb.org.tr"))
         for price in gtb_prices:
-            doc = {**price}
-            doc["createdAt"] = datetime.now(timezone.utc).isoformat()
-            doc["createdBy"] = "system"
-            turkish_exchange_prices_col.insert_one(doc)
+            insert_document("turkish_exchange_prices", {**price, "createdBy": "system"})
             stored_count += 1
     
     return {
@@ -794,20 +783,14 @@ async def scrape_turkish_exchanges(user=Depends(get_current_user)):
 @router.post("/turkish-exchanges")
 async def add_turkish_exchange_price(data: TurkishExchangePrice, user=Depends(require_roles("admin"))):
     """Manually add Turkish exchange price"""
-    doc = {
-        **data.dict(),
-        "createdBy": user.get("username"),
-        "createdAt": datetime.now(timezone.utc).isoformat()
-    }
-    result = turkish_exchange_prices_col.insert_one(doc)
-    doc["_id"] = result.inserted_id
-    return serialize_doc(doc)
+    doc = {**data.dict(), "createdBy": user.get("username")}
+    return serialize_doc_row(insert_document("turkish_exchange_prices", doc))
 
 
 @router.delete("/turkish-exchanges/{price_id}")
 async def delete_turkish_exchange_price(price_id: str, user=Depends(require_roles("admin"))):
     """Delete Turkish exchange price entry"""
-    turkish_exchange_prices_col.delete_one({"_id": ObjectId(price_id)})
+    delete_document("turkish_exchange_prices", price_id)
     return {"message": "Deleted"}
 
 
@@ -821,16 +804,21 @@ async def get_market_notes(
     user=Depends(get_current_user)
 ):
     """Get market notes with optional filters"""
-    query = {}
+    where, params = [], []
     if commodity:
-        query["commodity"] = commodity
+        where.append("commodity = %s")
+        params.append(commodity)
     if period:
-        query["period"] = period
+        where.append("period = %s")
+        params.append(period)
     if tag:
-        query["tags"] = tag
-    
-    notes = list(market_notes_col.find(query).sort("createdAt", -1).limit(100))
-    return [serialize_doc(n) for n in notes]
+        where.append("tags @> jsonb_build_array(%s::text)")
+        params.append(tag)
+    sql = "SELECT * FROM market_notes"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY created_at DESC LIMIT 100"
+    return [serialize_doc_row(n) for n in q_all(sql, params)]
 
 
 @router.post("/notes")
@@ -840,49 +828,32 @@ async def create_market_note(note: MarketNote, user=Depends(get_current_user)):
         **note.dict(),
         "createdBy": user.get("username"),
         "createdByName": user.get("name", user.get("username")),
-        "createdAt": datetime.now(timezone.utc).isoformat(),
-        "updatedAt": datetime.now(timezone.utc).isoformat()
     }
-    result = market_notes_col.insert_one(doc)
-    doc["_id"] = result.inserted_id
-    return serialize_doc(doc)
+    return serialize_doc_row(insert_document("market_notes", doc))
 
 
 @router.put("/notes/{note_id}")
 async def update_market_note(note_id: str, note: MarketNote, user=Depends(get_current_user)):
     """Update a market note"""
-    update_data = {
-        "content": note.content,
-        "updatedAt": datetime.now(timezone.utc).isoformat(),
-        "updatedBy": user.get("username")
-    }
+    update_data = {"content": note.content, "updatedBy": user.get("username")}
     if note.tags:
         update_data["tags"] = note.tags
-    market_notes_col.update_one(
-        {"_id": ObjectId(note_id)},
-        {"$set": update_data}
-    )
-    updated = market_notes_col.find_one({"_id": ObjectId(note_id)})
-    return serialize_doc(updated)
+    updated = update_document("market_notes", note_id, set_fields=update_data)
+    return serialize_doc_row(updated)
 
 
 @router.delete("/notes/{note_id}")
 async def delete_market_note(note_id: str, user=Depends(get_current_user)):
     """Delete a market note"""
-    market_notes_col.delete_one({"_id": ObjectId(note_id)})
+    delete_document("market_notes", note_id)
     return {"message": "Note deleted"}
 
 
 @router.get("/notes/years")
 async def get_market_note_years(user=Depends(get_current_user)):
     """Get list of distinct years that have notes"""
-    pipeline = [
-        {"$match": {"period": {"$regex": r"^\d{4}$"}}},
-        {"$group": {"_id": "$period"}},
-        {"$sort": {"_id": -1}}
-    ]
-    years = [doc["_id"] for doc in market_notes_col.aggregate(pipeline)]
-    return years
+    rows = q_all(r"SELECT DISTINCT period FROM market_notes WHERE period ~ '^\d{4}$' ORDER BY period DESC")
+    return [r["period"] for r in rows]
 
 
 
@@ -895,100 +866,78 @@ async def get_tmo_tenders(
     user=Depends(get_current_user)
 ):
     """Get TMO tenders with optional filters"""
-    query = {}
+    where, params = [], []
     if status:
-        query["status"] = status
+        where.append("status = %s")
+        params.append(status)
     if commodity:
-        query["commodity"] = commodity
-    
-    tenders = list(tmo_tenders_col.find(query).sort("tenderDate", -1))
-    return [serialize_doc(t) for t in tenders]
+        where.append("commodity = %s")
+        params.append(commodity)
+    sql = "SELECT * FROM tmo_tenders"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY tender_date DESC"
+    return [serialize_doc_row(t) for t in q_all(sql, params)]
 
 
 @router.post("/tenders")
 async def create_tmo_tender(tender: TMOTender, user=Depends(require_roles("admin"))):
     """Create a new TMO tender"""
-    doc = {
-        **tender.dict(),
-        "createdBy": user.get("username"),
-        "createdAt": datetime.now(timezone.utc).isoformat()
-    }
-    result = tmo_tenders_col.insert_one(doc)
-    doc["_id"] = result.inserted_id
-    return serialize_doc(doc)
+    doc = {**tender.dict(), "createdBy": user.get("username")}
+    return serialize_doc_row(insert_document("tmo_tenders", doc))
 
 
 @router.put("/tenders/{tender_id}")
 async def update_tmo_tender(tender_id: str, tender: TMOTender, user=Depends(require_roles("admin"))):
     """Update a TMO tender"""
-    update_data = {
-        **tender.dict(),
-        "updatedAt": datetime.now(timezone.utc).isoformat(),
-        "updatedBy": user.get("username")
-    }
-    tmo_tenders_col.update_one(
-        {"_id": ObjectId(tender_id)},
-        {"$set": update_data}
-    )
-    updated = tmo_tenders_col.find_one({"_id": ObjectId(tender_id)})
-    return serialize_doc(updated)
+    update_data = {**tender.dict(), "updatedBy": user.get("username")}
+    updated = update_document("tmo_tenders", tender_id, set_fields=update_data)
+    return serialize_doc_row(updated)
 
 
 @router.post("/tenders/{tender_id}/results")
 async def add_tender_result(tender_id: str, result: dict, user=Depends(require_roles("admin"))):
     """Add a result to a TMO tender"""
-    tmo_tenders_col.update_one(
-        {"_id": ObjectId(tender_id)},
-        {
-            "$push": {"results": {**result, "addedAt": datetime.now(timezone.utc).isoformat()}},
-            "$set": {"updatedAt": datetime.now(timezone.utc).isoformat()}
-        }
-    )
-    updated = tmo_tenders_col.find_one({"_id": ObjectId(tender_id)})
-    return serialize_doc(updated)
+    tender = serialize_doc_row(q_one("SELECT * FROM tmo_tenders WHERE id = %s", (tender_id,)))
+    results = (tender.get("results") or []) if tender else []
+    results.append({**result, "addedAt": datetime.now(timezone.utc).isoformat()})
+    updated = update_document("tmo_tenders", tender_id, set_fields={"results": results})
+    return serialize_doc_row(updated)
 
 
 
 @router.put("/tenders/{tender_id}/results/{result_index}")
 async def update_tender_result(tender_id: str, result_index: int, result: dict, user=Depends(require_roles("admin"))):
     """Update a specific result in a TMO tender by index"""
-    tender = tmo_tenders_col.find_one({"_id": ObjectId(tender_id)})
+    tender = serialize_doc_row(q_one("SELECT * FROM tmo_tenders WHERE id = %s", (tender_id,)))
     if not tender:
         raise HTTPException(status_code=404, detail="Tender not found")
-    results = tender.get("results", [])
+    results = tender.get("results", []) or []
     if result_index < 0 or result_index >= len(results):
         raise HTTPException(status_code=404, detail="Result index out of range")
     results[result_index] = {**result, "updatedAt": datetime.now(timezone.utc).isoformat()}
-    tmo_tenders_col.update_one(
-        {"_id": ObjectId(tender_id)},
-        {"$set": {"results": results, "updatedAt": datetime.now(timezone.utc).isoformat()}}
-    )
-    updated = tmo_tenders_col.find_one({"_id": ObjectId(tender_id)})
-    return serialize_doc(updated)
+    updated = update_document("tmo_tenders", tender_id, set_fields={"results": results})
+    return serialize_doc_row(updated)
 
 
 @router.delete("/tenders/{tender_id}/results/{result_index}")
 async def delete_tender_result(tender_id: str, result_index: int, user=Depends(require_roles("admin"))):
     """Delete a specific result from a TMO tender by index"""
-    tender = tmo_tenders_col.find_one({"_id": ObjectId(tender_id)})
+    tender = serialize_doc_row(q_one("SELECT * FROM tmo_tenders WHERE id = %s", (tender_id,)))
     if not tender:
         raise HTTPException(status_code=404, detail="Tender not found")
-    results = tender.get("results", [])
+    results = tender.get("results", []) or []
     if result_index < 0 or result_index >= len(results):
         raise HTTPException(status_code=404, detail="Result index out of range")
     results.pop(result_index)
-    tmo_tenders_col.update_one(
-        {"_id": ObjectId(tender_id)},
-        {"$set": {"results": results, "updatedAt": datetime.now(timezone.utc).isoformat()}}
-    )
-    updated = tmo_tenders_col.find_one({"_id": ObjectId(tender_id)})
-    return serialize_doc(updated)
+    updated = update_document("tmo_tenders", tender_id, set_fields={"results": results})
+    return serialize_doc_row(updated)
 
 
 @router.delete("/tenders/{tender_id}")
 async def delete_tmo_tender(tender_id: str, user=Depends(require_roles("admin"))):
     """Delete a TMO tender"""
-    tmo_tenders_col.delete_one({"_id": ObjectId(tender_id)})
+    delete_document("tmo_tenders", tender_id)
     return {"message": "Tender deleted"}
 
 
@@ -997,27 +946,21 @@ async def delete_tmo_tender(tender_id: str, user=Depends(require_roles("admin"))
 @router.get("/telegram/channels")
 async def get_telegram_channels(user=Depends(get_current_user)):
     """Get list of Telegram channels"""
-    channels = list(telegram_channels_col.find())
-    return [serialize_doc(c) for c in channels]
+    channels = q_all("SELECT * FROM telegram_channels")
+    return [serialize_doc_row(c) for c in channels]
 
 
 @router.post("/telegram/channels")
 async def add_telegram_channel(channel: TelegramChannel, user=Depends(require_roles("admin"))):
     """Add a Telegram channel"""
-    doc = {
-        **channel.dict(),
-        "createdBy": user.get("username"),
-        "createdAt": datetime.now(timezone.utc).isoformat()
-    }
-    result = telegram_channels_col.insert_one(doc)
-    doc["_id"] = result.inserted_id
-    return serialize_doc(doc)
+    doc = {**channel.dict(), "createdBy": user.get("username")}
+    return serialize_doc_row(insert_document("telegram_channels", doc))
 
 
 @router.delete("/telegram/channels/{channel_id}")
 async def delete_telegram_channel(channel_id: str, user=Depends(require_roles("admin"))):
     """Delete a Telegram channel"""
-    telegram_channels_col.delete_one({"_id": ObjectId(channel_id)})
+    delete_document("telegram_channels", channel_id)
     return {"message": "Channel deleted"}
 
 
@@ -1027,7 +970,7 @@ async def get_telegram_messages(user=Depends(get_current_user)):
     Get messages from public Telegram channels by scraping their web previews.
     No bot token required for public channels.
     """
-    channels = list(telegram_channels_col.find({"isActive": True}))
+    channels = [serialize_doc_row(c) for c in q_all("SELECT * FROM telegram_channels WHERE is_active = true")]
     if not channels:
         return {"messages": []}
     
@@ -1077,27 +1020,25 @@ async def get_telegram_messages(user=Depends(get_current_user)):
 @router.get("/commodities")
 async def get_market_commodities(user=Depends(get_current_user)):
     """Get list of tracked commodities"""
-    commodities = list(market_commodities_col.find())
+    commodities = q_all("SELECT * FROM market_commodities")
     if not commodities:
         # Initialize with defaults
         for comm in DEFAULT_COMMODITIES:
-            market_commodities_col.insert_one(comm)
-        commodities = list(market_commodities_col.find())
-    return [serialize_doc(c) for c in commodities]
+            insert_document("market_commodities", dict(comm))
+        commodities = q_all("SELECT * FROM market_commodities")
+    return [serialize_doc_row(c) for c in commodities]
 
 
 @router.post("/commodities")
 async def add_market_commodity(commodity: dict, user=Depends(require_roles("admin"))):
     """Add a new commodity to track"""
-    result = market_commodities_col.insert_one(commodity)
-    commodity["_id"] = result.inserted_id
-    return serialize_doc(commodity)
+    return serialize_doc_row(insert_document("market_commodities", commodity))
 
 
 @router.delete("/commodities/{commodity_id}")
 async def delete_market_commodity(commodity_id: str, user=Depends(require_roles("admin"))):
     """Remove a commodity from tracking"""
-    market_commodities_col.delete_one({"_id": ObjectId(commodity_id)})
+    delete_document("market_commodities", commodity_id)
     return {"message": "Commodity removed"}
 
 
